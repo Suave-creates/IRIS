@@ -207,6 +207,51 @@ export interface DashboardData {
   lastSync: string;
 }
 
+// ── Chat + Context Engine ─────────────────────────────────────────────────────
+export interface Conversation {
+  id: string;
+  title: string;
+  updatedAt: string;
+}
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'iris';
+  text: string;
+  createdAt: string;
+  hasActions?: boolean;
+}
+/** A piece of context the engine selected and injected (shown in the context rail). */
+export interface ChatContextSource {
+  id: string;
+  kind: 'memory' | 'mail' | 'calendar' | 'project' | 'task' | 'action';
+  label: string;
+  sublabel: string;
+  relevance: number; // 0–100
+}
+/** The terminal SSE event of a chat turn. */
+export interface ChatTurnResult {
+  conversationId: string;
+  sources: ChatContextSource[];
+  tokens: { used: number; window: number };
+  actionsPrepared: number;
+}
+
+// ── Lens ──────────────────────────────────────────────────────────────────────
+export interface LensResult {
+  kind: string;
+  source: string;
+  icon: string;
+  title: string;
+  snippet: string;
+  meta: string;
+}
+export interface LensGather {
+  keyword: string;
+  summary: string;
+  results: LensResult[];
+  sources: string[];
+}
+
 // ── Admin ────────────────────────────────────────────────────────────────────
 export interface AdminUser {
   id: string;

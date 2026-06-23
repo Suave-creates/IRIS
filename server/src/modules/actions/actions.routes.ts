@@ -5,6 +5,7 @@ import { Errors } from '../../lib/errors.js';
 import { currentUser, requireAuth } from '../auth/guards.js';
 import { auditService } from '../audit/audit.service.js';
 import { actionRepo, toActionProposal } from './actions.repo.js';
+import { executeApprovedAction } from './executor.js';
 
 const listQuerySchema = z.object({
   status: z.enum(['pending', 'approved', 'rejected', 'executed', 'failed']).optional(),
@@ -38,14 +39,17 @@ export async function actionsRoutes(app: FastifyInstance): Promise<void> {
     }
 
     await actionRepo.decide(me.tenantId, id, 'approved');
+    // Execute internal actions immediately (task/event/memory); external ones
+    // stay 'approved' pending connector delivery (M4).
+    const finalStatus = await executeApprovedAction({ ...existing, status: 'approved' });
 
     await auditService.record({
       tenantId: me.tenantId,
       actorUserId: me.id,
-      action: 'action.approved',
+      action: finalStatus === 'failed' ? 'action.failed' : 'action.approved',
       targetType: 'action',
       targetId: id,
-      metadata: { kind: existing.kind, target: existing.target },
+      metadata: { kind: existing.kind, target: existing.target, result: finalStatus },
       ip: req.ip,
     });
 
@@ -85,7 +89,13 @@ export async function actionsRoutes(app: FastifyInstance): Promise<void> {
   // POST /approve-all → { approved: <count> }
   app.post('/approve-all', async (req) => {
     const me = currentUser(req);
-    const approved = await actionRepo.approveAllPending(me.tenantId);
+    const pending = await actionRepo.listByTenant(me.tenantId, 'pending');
+    let approved = 0;
+    for (const row of pending) {
+      await actionRepo.decide(me.tenantId, row.id, 'approved');
+      await executeApprovedAction({ ...row, status: 'approved' });
+      approved++;
+    }
 
     await auditService.record({
       tenantId: me.tenantId,

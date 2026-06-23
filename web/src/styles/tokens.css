@@ -5,7 +5,7 @@
 
 :root {
   /* Brand accent (running default from the prototype; tenant-overridable). */
-  --accent: #4b49d6;
+  --accent: #762fcc;
   --accent-rgb: 75, 73, 214;
 
   /* Surfaces & text — light */

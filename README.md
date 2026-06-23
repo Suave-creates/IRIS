@@ -75,6 +75,6 @@ See [`.env.example`](./.env.example) for the full list. Notable keys:
 | M0 | Foundations + design-system port | ✅ |
 | M1 | Google SSO auth + tenancy + RBAC | ✅ |
 | M2 | Data model + live views | ✅ |
-| M3 | Context Engine + Claude core | ◻ |
+| M3 | Context Engine + Claude core (chat, approval execution, memory, Lens) | ✅ |
 | M4 | Connector framework + workers | ◻ |
 | M5 | Monitoring, logging, hardening, Docker, docs | ◻ |

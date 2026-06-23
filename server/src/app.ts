@@ -12,10 +12,12 @@ import { adminRoutes } from './modules/admin/admin.routes.js';
 import { authRoutes } from './modules/auth/auth.routes.js';
 import { registerAuthContext } from './modules/auth/guards.js';
 import { calendarRoutes } from './modules/calendar/calendar.routes.js';
+import { chatRoutes } from './modules/chat/chat.routes.js';
 import { connectorsRoutes } from './modules/connectors/connectors.routes.js';
 import { dashboardRoutes } from './modules/dashboard/dashboard.routes.js';
 import { healthRoutes } from './modules/health/health.routes.js';
 import { journalRoutes } from './modules/journal/journal.routes.js';
+import { lensRoutes } from './modules/lens/lens.routes.js';
 import { mailRoutes } from './modules/mail/mail.routes.js';
 import { memoryRoutes } from './modules/memory/memory.routes.js';
 import { notificationsRoutes } from './modules/notifications/notifications.routes.js';
@@ -82,6 +84,8 @@ export async function buildApp(): Promise<FastifyInstance> {
       await api.register(notificationsRoutes, { prefix: '/notifications' });
       await api.register(actionsRoutes, { prefix: '/actions' });
       await api.register(adminRoutes, { prefix: '/admin' });
+      await api.register(chatRoutes, { prefix: '/chat' });
+      await api.register(lensRoutes, { prefix: '/lens' });
     },
     { prefix: '/api' },
   );

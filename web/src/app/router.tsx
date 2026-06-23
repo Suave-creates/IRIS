@@ -6,6 +6,8 @@ import { Login } from '@/features/auth/Login';
 import { ViewPage } from '@/views/ViewPage';
 import { Welcome } from '@/views/Welcome';
 import { Settings } from '@/views/Settings';
+import { Chat } from '@/views/Chat';
+import { Lens } from '@/views/Lens';
 import { Dashboard } from '@/views/Dashboard';
 import { Projects } from '@/views/Projects';
 import { Journal } from '@/views/Journal';
@@ -29,13 +31,13 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <Dashboard /> },
           { path: p(VIEW_PATHS.onboarding), element: <Welcome /> },
-          { path: p(VIEW_PATHS.chat), element: <ViewPage view="chat" /> },
+          { path: p(VIEW_PATHS.chat), element: <Chat /> },
           { path: p(VIEW_PATHS.projects), element: <Projects /> },
           { path: p(VIEW_PATHS.mail), element: <Mail /> },
           { path: p(VIEW_PATHS.calendar), element: <Calendar /> },
           { path: p(VIEW_PATHS.journal), element: <Journal /> },
           { path: p(VIEW_PATHS.whiteboard), element: <ViewPage view="whiteboard" /> },
-          { path: p(VIEW_PATHS.knowledge), element: <ViewPage view="knowledge" /> },
+          { path: p(VIEW_PATHS.knowledge), element: <Lens /> },
           { path: p(VIEW_PATHS.connectors), element: <Connectors /> },
           { path: p(VIEW_PATHS.memory), element: <Memory /> },
           { path: p(VIEW_PATHS.admin), element: <Admin /> },
