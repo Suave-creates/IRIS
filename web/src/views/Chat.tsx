@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import type { ChatContextSource } from '@iris/shared';
 import { Brain, Calendar, Check, Folder, Mail, Search, Send, Sparkle } from '@/components/icons';
+import { Markdown } from '@/components/Markdown';
 import { ApprovalModal } from '@/features/actions/ApprovalModal';
 import { useChat } from '@/features/chat/useChat';
 import styles from './Chat.module.css';
@@ -80,7 +81,17 @@ export function Chat() {
                       {user ? 'You' : 'IRIS'}
                     </span>
                     <div className={`${styles.bubble} ${user ? styles.bubbleUser : styles.bubbleIris}`}>
-                      {streaming ? <span className={styles.dots}><i /><i /><i /></span> : m.text}
+                      {streaming ? (
+                        <span className={styles.dots}>
+                          <i />
+                          <i />
+                          <i />
+                        </span>
+                      ) : user ? (
+                        m.text
+                      ) : (
+                        <Markdown>{m.text}</Markdown>
+                      )}
                     </div>
                     {m.hasActions && (
                       <button className={styles.actionsBtn} onClick={() => setModalOpen(true)}>
