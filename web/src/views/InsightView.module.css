@@ -1,0 +1,61 @@
+.blocks {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* KPI cards */
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 8px;
+}
+.kpiCard {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 11px;
+}
+.kpiVal {
+  font-size: 19px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  line-height: 1.1;
+}
+.kpiLabel {
+  font-size: 11px;
+  color: var(--text-2);
+  margin-top: 3px;
+}
+.kpiSub {
+  font-size: 10.5px;
+  color: var(--text-3);
+  margin-top: 2px;
+}
+
+/* Table */
+.tableWrap {
+  overflow-x: auto;
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.table th,
+.table td {
+  border: 1px solid var(--border);
+  padding: 6px 9px;
+  text-align: left;
+  vertical-align: top;
+}
+.table thead th {
+  background: var(--surface-2);
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+}
+.table tbody tr:nth-child(even) {
+  background: var(--surface-2);
+}

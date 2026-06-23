@@ -275,6 +275,77 @@ export interface LensGather {
   sources: string[];
 }
 
+// ── Whiteboard (Smart Whiteboard) ─────────────────────────────────────────────
+export type WhiteboardKind = 'sheet' | 'doc' | 'folder' | 'pdf' | 'slide' | 'insight';
+/** A window on the canvas — a connector-backed file or an AI-generated insight. */
+export interface WhiteboardItem {
+  id: string;
+  kind: WhiteboardKind;
+  title: string;
+  externalId: string | null;
+  webLink: string | null;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  z: number;
+  aiIncluded: boolean;
+  /** Insight body text (only for kind === 'insight'). */
+  body: string | null;
+  createdAt: string;
+}
+/** Adds a known connector file (chosen from the linked-sources library) to the canvas. */
+export interface AddWhiteboardItemInput {
+  kind: 'sheet' | 'doc' | 'folder';
+  externalId: string;
+  title: string;
+  webLink?: string | null;
+  x?: number;
+  y?: number;
+}
+/** Adds a file to the canvas by pasted Google URL or ID. */
+export interface AddWhiteboardByRefInput {
+  kind: 'sheet' | 'doc' | 'folder';
+  ref: string;
+  x?: number;
+  y?: number;
+}
+/** Partial update from drag / resize / AI toggle / rename. */
+export interface UpdateWhiteboardItemInput {
+  x?: number;
+  y?: number;
+  w?: number;
+  h?: number;
+  z?: number;
+  aiIncluded?: boolean;
+  title?: string;
+}
+export type WhiteboardAiAction = 'summarize' | 'reconcile' | 'board' | 'custom';
+/** Runs cross-file AI over every AI-included window; returns a new insight window. */
+export interface WhiteboardAiInput {
+  action: WhiteboardAiAction;
+  prompt?: string;
+}
+
+/** A visual block Claude can emit for an insight window. */
+export type InsightBlock =
+  | { type: 'markdown'; text: string }
+  | { type: 'kpis'; items: { label: string; value: string; sub?: string | null }[] }
+  | { type: 'table'; columns: string[]; rows: string[][] }
+  | {
+      type: 'chart';
+      chart: 'line' | 'bar';
+      title?: string | null;
+      xLabel?: string | null;
+      yLabel?: string | null;
+      series: { name: string; points: { x: string; y: number }[] }[];
+    };
+/** A rendered insight: a title + ordered visual blocks. Stored as JSON in WhiteboardItem.body. */
+export interface WhiteboardInsight {
+  title: string;
+  blocks: InsightBlock[];
+}
+
 // ── Admin ────────────────────────────────────────────────────────────────────
 export interface AdminUser {
   id: string;

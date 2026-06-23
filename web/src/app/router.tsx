@@ -10,6 +10,7 @@ import { Chat } from '@/views/Chat';
 import { Lens } from '@/views/Lens';
 import { Dashboard } from '@/views/Dashboard';
 import { Projects } from '@/views/Projects';
+import { Whiteboard } from '@/views/Whiteboard';
 import { Journal } from '@/views/Journal';
 import { Calendar } from '@/views/Calendar';
 import { Mail } from '@/views/Mail';
@@ -36,7 +37,7 @@ export const router = createBrowserRouter([
           { path: p(VIEW_PATHS.mail), element: <Mail /> },
           { path: p(VIEW_PATHS.calendar), element: <Calendar /> },
           { path: p(VIEW_PATHS.journal), element: <Journal /> },
-          { path: p(VIEW_PATHS.whiteboard), element: <ViewPage view="whiteboard" /> },
+          { path: p(VIEW_PATHS.whiteboard), element: <Whiteboard /> },
           { path: p(VIEW_PATHS.knowledge), element: <Lens /> },
           { path: p(VIEW_PATHS.connectors), element: <Connectors /> },
           { path: p(VIEW_PATHS.memory), element: <Memory /> },

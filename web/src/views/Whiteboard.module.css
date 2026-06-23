@@ -1,0 +1,449 @@
+.board {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  width: 100%;
+}
+
+/* ── Left: file library ─────────────────────────────────────────────── */
+.library {
+  width: 210px;
+  flex: none;
+  border-right: 1px solid var(--border);
+  padding: 16px 13px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.libLabel {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin-bottom: 4px;
+}
+.libCenter {
+  display: flex;
+  justify-content: center;
+  padding: 18px 0;
+}
+.libEmpty {
+  font-size: 12px;
+  color: var(--text-3);
+  line-height: 1.5;
+}
+.libItem {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 9px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+.libItem:hover:not(:disabled) {
+  border-color: rgba(var(--accent-rgb), 0.4);
+  background: var(--surface-2);
+}
+.libItem:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.libIcon {
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  flex: none;
+}
+.libName {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.libPlus {
+  color: var(--text-3);
+  flex: none;
+}
+.libError {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--danger);
+  background: var(--danger-soft);
+  padding: 7px 9px;
+  border-radius: 8px;
+}
+.addRefBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 10px;
+  border-radius: 9px;
+  border: 1px dashed var(--border-2);
+  background: var(--surface);
+  color: var(--text-2);
+  cursor: pointer;
+  margin-top: 4px;
+}
+.addRefBtn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.refForm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+  margin-top: 4px;
+}
+.refKinds {
+  display: flex;
+  gap: 5px;
+}
+.refKind {
+  flex: 1;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 0;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text-2);
+  cursor: pointer;
+}
+.refKind[data-active='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.refInput {
+  width: 100%;
+  font-size: 12.5px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  outline: none;
+}
+.refInput:focus {
+  border-color: var(--accent);
+}
+.refActions {
+  display: flex;
+  gap: 6px;
+}
+
+/* ── Center: canvas ─────────────────────────────────────────────────── */
+.canvasWrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.canvasBar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.ctxBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--accent);
+}
+.tidyBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 11px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-2);
+  cursor: pointer;
+}
+.tidyBtn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.tidyBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.canvas {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+  background-color: var(--surface-3);
+  background-image: radial-gradient(rgba(125, 125, 150, 0.22) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+.canvasCenter {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.canvasEmpty {
+  max-width: 360px;
+  text-align: center;
+  font-size: 13.5px;
+  color: var(--text-3);
+  line-height: 1.6;
+}
+.canvasError {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--danger);
+  background: var(--danger-soft);
+  padding: 11px 14px;
+  border-radius: var(--radius);
+}
+
+/* ── Canvas window ──────────────────────────────────────────────────── */
+.window {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border-2);
+  border-radius: 12px;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.16);
+  overflow: hidden;
+}
+.window[data-ai='true'] {
+  border: 1.5px solid var(--accent);
+}
+.window[data-dragging='true'] {
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.32);
+}
+.winHead {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 9px;
+  border-bottom: 1px solid var(--border);
+  cursor: grab;
+  user-select: none;
+  background: var(--surface-2);
+}
+.winHead:active {
+  cursor: grabbing;
+}
+.winIcon {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  flex: none;
+}
+.winTitle {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.aiToggle {
+  flex: none;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 7px;
+  border-radius: 6px;
+  border: none;
+  background: var(--surface-3);
+  color: var(--text-3);
+  cursor: pointer;
+}
+.aiToggle[data-on='true'] {
+  background: var(--accent);
+  color: #fff;
+}
+.winClose {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.winClose:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.winBody {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 11px 12px;
+}
+.insightText {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.fileBody {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.fileKind {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text-2);
+}
+.fileLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+  width: fit-content;
+}
+.fileLink:hover {
+  text-decoration: underline;
+}
+.fileHint {
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+/* ── Right: Claude rail ─────────────────────────────────────────────── */
+.rail {
+  width: 304px;
+  flex: none;
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+.railHead {
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.railTitle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 14.5px;
+  font-weight: 750;
+  color: var(--accent);
+}
+.railSub {
+  font-size: 12px;
+  color: var(--text-3);
+  margin-top: 3px;
+}
+.railSection {
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.railLabel {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.action {
+  text-align: left;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+.action:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.promptBox {
+  width: 100%;
+  resize: none;
+  font-size: 13px;
+  font-family: inherit;
+  padding: 10px 11px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+}
+.promptBox:focus {
+  border-color: var(--accent);
+}
+.railHint {
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+.railRunning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--accent);
+}
