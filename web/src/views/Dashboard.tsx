@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import type { BadgeTone } from '@/components/primitives';
 import { Badge, Button, Card, Spinner } from '@/components/primitives';
 import { Check, Refresh } from '@/components/icons';
 import { ApiError } from '@/lib/api';
 import { useDashboard } from '@/features/dashboard/useDashboard';
+import { streamSyncAll } from '@/features/connectors/api';
 import { ApprovalModal } from '@/features/actions/ApprovalModal';
 import type {
   DashboardData,
@@ -81,20 +83,40 @@ export function Dashboard() {
 
 function Header({ data }: { data: DashboardData }) {
   const { priorities, deadlines, approvals } = data.briefing;
+  const qc = useQueryClient();
   const [syncing, setSyncing] = useState(false);
+  const [progress, setProgress] = useState<string | null>(null);
   const [lastSync, setLastSync] = useState(data.lastSync);
-  const timer = useRef<ReturnType<typeof setTimeout>>();
 
-  useEffect(() => () => clearTimeout(timer.current), []);
+  const PROVIDER_LABEL: Record<string, string> = {
+    gmail: 'Gmail', gcalendar: 'Calendar', gdrive: 'Drive', gsheets: 'Sheets',
+  };
 
-  // M2 stub: no real backend sync yet (M4). Show a brief spinner, then settle.
+  // Real "Sync Everything": streams progress across connected connectors.
   const startSync = () => {
     if (syncing) return;
     setSyncing(true);
-    timer.current = setTimeout(() => {
-      setSyncing(false);
-      setLastSync('just now');
-    }, 1200);
+    setProgress(null);
+    void streamSyncAll({
+      onProgress: (e) => {
+        if (e.phase === 'start') setProgress(PROVIDER_LABEL[e.provider] ?? e.provider);
+      },
+      onDone: (r) => {
+        setSyncing(false);
+        setProgress(null);
+        setLastSync('just now');
+        qc.invalidateQueries({ queryKey: ['dashboard'] });
+        qc.invalidateQueries({ queryKey: ['connectors'] });
+        qc.invalidateQueries({ queryKey: ['mail'] });
+        qc.invalidateQueries({ queryKey: ['calendar'] });
+        if (r.imported === 0) setLastSync('just now · connect Google to sync data');
+      },
+      onError: () => {
+        setSyncing(false);
+        setProgress(null);
+        setLastSync('sync failed — connect Google first');
+      },
+    });
   };
 
   return (
@@ -114,7 +136,7 @@ function Header({ data }: { data: DashboardData }) {
           leftIcon={syncing ? undefined : <Refresh size={16} />}
           className={styles.syncBtn}
         >
-          {syncing ? 'Syncing…' : 'Sync everything'}
+          {syncing ? (progress ? `Syncing ${progress}…` : 'Syncing…') : 'Sync everything'}
         </Button>
         <span className={styles.lastSync}>Last synced {lastSync}</span>
       </div>

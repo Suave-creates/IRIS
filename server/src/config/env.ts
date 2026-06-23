@@ -79,6 +79,11 @@ const EnvSchema = z
     GOOGLE_CLIENT_ID: z.string().default(''),
     GOOGLE_CLIENT_SECRET: z.string().default(''),
     GOOGLE_OAUTH_REDIRECT_URI: z.string().default('http://localhost:8080/api/auth/google/callback'),
+    /** Connector authorization callback (must be registered in the Google OAuth client). */
+    GOOGLE_CONNECTOR_REDIRECT_URI: z.string().default('http://localhost:8080/api/connectors/google/callback'),
+
+    /** Background worker loop (token refresh, health, scheduled sync). Disable in tests. */
+    WORKERS_ENABLED: boolish.default('true'),
 
     // Seed (local/dev convenience)
     SEED_OWNER_EMAIL: z.string().default('owner@demo.local'),

@@ -2,6 +2,8 @@ import type { ActionStatus } from '@iris/shared';
 import { execute } from '../../db/pool.js';
 import { id } from '../../lib/ids.js';
 import { logger } from '../../lib/logger.js';
+import { googleClient } from '../../connectors/google/client.js';
+import { gmailSend } from '../../connectors/google/sync.js';
 import type { ActionRow } from './actions.repo.js';
 
 function parsePayload(raw: string | null): Record<string, unknown> {
@@ -98,8 +100,19 @@ export async function executeApprovedAction(row: ActionRow): Promise<ActionStatu
         );
         break;
       }
+      case 'Draft email': {
+        // Deliver via Gmail when connected; otherwise leave approved for later.
+        const to = str(p.to) ?? str(p.recipient);
+        const subject = str(p.subject) ?? row.title;
+        const bodyText = str(p.body) ?? row.detail ?? '';
+        if (to && (await googleClient.isConnected(row.tenant_id))) {
+          await gmailSend(row.tenant_id, to, subject, bodyText);
+          break; // executed
+        }
+        return 'approved'; // no Gmail / no recipient → approved, delivery deferred
+      }
       default:
-        // Draft email / Update record / anything external → awaits connector delivery (M4).
+        // Update record / anything else external → awaits connector delivery.
         return 'approved';
     }
     await setStatus(row.tenant_id, row.id, 'executed');

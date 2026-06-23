@@ -1,13 +1,20 @@
 import type { ReactNode } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import type { Connector, ConnectorProvider, ConnectorStatus } from '@iris/shared';
-import { Spinner } from '@/components/primitives';
-import { Calendar, Folder } from '@/components/icons';
+import { Button, Spinner } from '@/components/primitives';
+import { Calendar, Folder, Plug, Refresh } from '@/components/icons';
 import { ApiError } from '@/lib/api';
-import { useConnectors } from '@/features/connectors/useConnectors';
+import { startConnect } from '@/features/connectors/api';
+import { useConnectors, useDisconnectConnector, useSyncConnector } from '@/features/connectors/useConnectors';
 import styles from './Connectors.module.css';
 
 export function Connectors() {
   const { data, isLoading, error } = useConnectors();
+  const disconnect = useDisconnectConnector();
+  const sync = useSyncConnector();
+  const [params] = useSearchParams();
+  const connected = params.get('connected');
+  const oauthError = params.get('error');
 
   return (
     <div className={styles.page}>
@@ -19,8 +26,23 @@ export function Connectors() {
             monitored for health.
           </p>
         </div>
-        {data && data.length > 0 && <Summary connectors={data} />}
+        <div className={styles.headerActions}>
+          {data && data.length > 0 && <Summary connectors={data} />}
+          <Button leftIcon={<Plug size={15} />} onClick={() => startConnect('gmail')}>
+            Connect Google
+          </Button>
+        </div>
       </header>
+
+      {connected && (
+        <div className={styles.banner}>
+          Google is connected. Use <b>Sync</b> on a connector (or “Sync Everything” on the dashboard) to pull your
+          latest data.
+        </div>
+      )}
+      {oauthError && (
+        <div className={styles.error}>Authorization didn’t complete ({oauthError}). Please try connecting again.</div>
+      )}
 
       {isLoading && (
         <div className={styles.center}>
@@ -45,7 +67,16 @@ export function Connectors() {
               <div className={styles.groupLabel}>{group}</div>
               <div className={styles.grid}>
                 {items.map((c) => (
-                  <ConnectorCard key={c.id} connector={c} />
+                  <ConnectorCard
+                    key={c.id}
+                    connector={c}
+                    onSync={() => sync.mutate(c.provider)}
+                    onDisconnect={() => disconnect.mutate(c.provider)}
+                    busy={
+                      (sync.isPending && sync.variables === c.provider) ||
+                      (disconnect.isPending && disconnect.variables === c.provider)
+                    }
+                  />
                 ))}
               </div>
             </section>
@@ -82,20 +113,28 @@ function Summary({ connectors }: { connectors: Connector[] }) {
 }
 
 // ── Connector card ──────────────────────────────────────────────────────────
-function ConnectorCard({ connector }: { connector: Connector }) {
+function ConnectorCard({
+  connector,
+  onSync,
+  onDisconnect,
+  busy,
+}: {
+  connector: Connector;
+  onSync: () => void;
+  onDisconnect: () => void;
+  busy: boolean;
+}) {
   const tone = STATUS_TONE[connector.status];
-  const reconnect = connector.status === 'expiring' || connector.status === 'error';
   const visual = PROVIDER_VISUAL[connector.provider];
   const attention = tone === 'warn' || tone === 'danger';
+  const isGoogle = ['gmail', 'gcalendar', 'gdrive', 'gsheets'].includes(connector.provider);
+  const needsAuth = connector.status === 'expiring' || connector.status === 'error' || connector.status === 'disconnected';
 
   return (
     <div className={`${styles.card} ${attention ? styles[`cardEdge_${tone}`] : ''}`}>
       <div className={styles.cardHead}>
         <div className={styles.identity}>
-          <span
-            className={styles.glyph}
-            style={{ background: `var(${visual.bg})`, color: `var(${visual.fg})` }}
-          >
+          <span className={styles.glyph} style={{ background: `var(${visual.bg})`, color: `var(${visual.fg})` }}>
             {visual.icon ?? visual.letter}
           </span>
           <span className={styles.name}>{connector.displayName}</span>
@@ -108,10 +147,25 @@ function ConnectorCard({ connector }: { connector: Connector }) {
       </div>
 
       <div className={styles.cardFoot}>
-        <span className={styles.synced}>{syncedLabel(connector.lastSyncedAt)}</span>
-        <button className={`${styles.action} ${reconnect ? styles[`action_${tone}`] : ''}`} type="button">
-          {reconnect ? 'Reconnect' : 'Manage'}
-        </button>
+        <span className={styles.synced}>{busy ? 'Working…' : syncedLabel(connector.lastSyncedAt)}</span>
+        <div className={styles.cardBtns}>
+          {isGoogle && needsAuth && (
+            <button className={`${styles.action} ${styles[`action_${tone}`] ?? ''}`} onClick={() => startConnect(connector.provider)}>
+              {connector.status === 'disconnected' ? 'Connect' : 'Reconnect'}
+            </button>
+          )}
+          {isGoogle && !needsAuth && (
+            <>
+              <button className={styles.action} onClick={onSync} disabled={busy} title="Sync now">
+                <Refresh size={13} /> Sync
+              </button>
+              <button className={styles.actionMuted} onClick={onDisconnect} disabled={busy}>
+                Disconnect
+              </button>
+            </>
+          )}
+          {!isGoogle && <span className={styles.soon}>Coming soon</span>}
+        </div>
       </div>
     </div>
   );

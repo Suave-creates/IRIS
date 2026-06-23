@@ -76,5 +76,5 @@ See [`.env.example`](./.env.example) for the full list. Notable keys:
 | M1 | Google SSO auth + tenancy + RBAC | ✅ |
 | M2 | Data model + live views | ✅ |
 | M3 | Context Engine + Claude core (chat, approval execution, memory, Lens) | ✅ |
-| M4 | Connector framework + workers | ◻ |
+| M4 | Connector framework + Google integration + workers + Sync Everything | ✅ |
 | M5 | Monitoring, logging, hardening, Docker, docs | ◻ |

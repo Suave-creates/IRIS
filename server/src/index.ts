@@ -2,6 +2,7 @@ import { buildApp } from './app.js';
 import { env, hasAnthropic, hasGoogleOAuth, isProd } from './config/env.js';
 import { closePool } from './db/pool.js';
 import { logger } from './lib/logger.js';
+import { startWorkers, stopWorkers } from './connectors/workers.js';
 
 async function main(): Promise<void> {
   const app = await buildApp();
@@ -9,6 +10,7 @@ async function main(): Promise<void> {
   const shutdown = async (signal: string): Promise<void> => {
     logger.info({ signal }, 'shutting down');
     try {
+      stopWorkers();
       await app.close();
       await closePool();
       process.exit(0);
@@ -22,6 +24,7 @@ async function main(): Promise<void> {
   process.on('unhandledRejection', (reason) => logger.error({ reason }, 'unhandledRejection'));
 
   await app.listen({ port: env.PORT, host: '0.0.0.0' });
+  startWorkers();
 
   // Security-relevant: with SSO enabled and no domain allow-list, any verified
   // Google account self-provisions a tenant. Warn in every environment.
