@@ -236,15 +236,15 @@ CREATE TABLE IF NOT EXISTS risks (
 
 -- ── Priorities (dashboard "Today's priorities, ranked by IRIS") ───────────
 CREATE TABLE IF NOT EXISTS priorities (
-  id         VARCHAR(40)  NOT NULL PRIMARY KEY,
-  tenant_id  VARCHAR(40)  NOT NULL,
-  user_id    VARCHAR(40)  NOT NULL,
-  rank       INT          NOT NULL DEFAULT 0,
-  title      VARCHAR(255) NOT NULL,
-  detail     VARCHAR(255) NULL,
-  tag        VARCHAR(40)  NULL,
-  tag_tone   ENUM('danger','warn','neutral','accent','info','success') NOT NULL DEFAULT 'neutral',
-  created_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  id            VARCHAR(40)  NOT NULL PRIMARY KEY,
+  tenant_id     VARCHAR(40)  NOT NULL,
+  user_id       VARCHAR(40)  NOT NULL,
+  priority_rank INT          NOT NULL DEFAULT 0,
+  title         VARCHAR(255) NOT NULL,
+  detail        VARCHAR(255) NULL,
+  tag           VARCHAR(40)  NULL,
+  tag_tone      ENUM('danger','warn','neutral','accent','info','success') NOT NULL DEFAULT 'neutral',
+  created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_prio_tenant FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE,
-  KEY idx_prio_tenant_rank (tenant_id, rank)
+  KEY idx_prio_tenant_rank (tenant_id, priority_rank)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

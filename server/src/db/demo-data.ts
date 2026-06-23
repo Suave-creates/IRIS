@@ -282,7 +282,7 @@ export async function seedTenantDemoData(
   ];
   for (const [rank, title, detail, tag, tone] of priorities)
     await execute(
-      'INSERT INTO priorities (id, tenant_id, user_id, rank, title, detail, tag, tag_tone) VALUES (:id,:t,:u,:r,:ti,:d,:tg,:tone)',
+      'INSERT INTO priorities (id, tenant_id, user_id, priority_rank, title, detail, tag, tag_tone) VALUES (:id,:t,:u,:r,:ti,:d,:tg,:tone)',
       { id: id('prio'), t: tenantId, u: userId, r: rank, ti: title, d: detail, tg: tag, tone },
     );
 

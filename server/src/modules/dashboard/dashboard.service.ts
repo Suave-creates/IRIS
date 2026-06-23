@@ -13,7 +13,7 @@ import { query } from '../../db/pool.js';
 
 export interface PriorityRow extends RowDataPacket {
   id: string;
-  rank: number;
+  priority_rank: number;
   title: string;
   detail: string | null;
   tag: string | null;
@@ -140,15 +140,15 @@ export function formatGreeting(now: Date, fullName: string): string {
 
 async function getPriorities(tenantId: string): Promise<DashboardPriority[]> {
   const rows = await query<PriorityRow[]>(
-    `SELECT id, rank, title, detail, tag, tag_tone
+    `SELECT id, priority_rank, title, detail, tag, tag_tone
        FROM priorities
       WHERE tenant_id = :tid
-      ORDER BY rank ASC, created_at ASC`,
+      ORDER BY priority_rank ASC, created_at ASC`,
     { tid: tenantId },
   );
   return rows.map((r) => ({
     id: r.id,
-    rank: r.rank,
+    rank: r.priority_rank,
     title: r.title,
     detail: r.detail,
     tag: r.tag,
