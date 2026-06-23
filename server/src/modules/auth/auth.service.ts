@@ -12,9 +12,10 @@ function domainOf(email: string): string {
 }
 
 function assertDomainAllowed(domain: string): void {
-  const allowed = env.AUTH_ALLOWED_DOMAINS;
-  if (allowed.length > 0 && !allowed.includes(domain)) {
-    throw Errors.forbidden(`Sign-in is restricted to: ${allowed.join(', ')}.`);
+  const allowed = env.AUTH_ALLOWED_DOMAINS.map((d) => d.toLowerCase());
+  // `domain` is already lowercased by domainOf(); compare case-insensitively.
+  if (allowed.length > 0 && !allowed.includes(domain.toLowerCase())) {
+    throw Errors.forbidden(`Sign-in is restricted to: ${env.AUTH_ALLOWED_DOMAINS.join(', ')}.`);
   }
 }
 
