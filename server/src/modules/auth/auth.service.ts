@@ -2,10 +2,21 @@ import type { Role } from '@iris/shared';
 import { env } from '../../config/env.js';
 import { Errors } from '../../lib/errors.js';
 import { hashPassword, verifyPassword } from '../../lib/crypto.js';
+import { logger } from '../../lib/logger.js';
+import { seedTenantDemoData } from '../../db/demo-data.js';
 import { tenantRepo } from '../tenants/tenant.repo.js';
 import { userRepo } from '../users/user.repo.js';
 import type { GoogleProfile } from './google.js';
 import type { UserRow } from './types.js';
+
+/** Populate a brand-new tenant with demo data so the workspace isn't empty. Never blocks sign-in. */
+async function seedNewTenant(user: UserRow): Promise<void> {
+  try {
+    await seedTenantDemoData(user.tenant_id, user.id, user.name);
+  } catch (err) {
+    logger.error({ err, tenantId: user.tenant_id }, 'demo seed on tenant creation failed (non-fatal)');
+  }
+}
 
 function domainOf(email: string): string {
   return email.split('@')[1]?.toLowerCase() ?? '';
@@ -79,6 +90,7 @@ export const authService = {
       googleSub: profile.sub,
     });
     await userRepo.markLogin(user.id);
+    if (created) await seedNewTenant(user);
     return user;
   },
 
@@ -96,6 +108,7 @@ export const authService = {
     const passwordHash = await hashPassword(input.password);
     const user = await userRepo.create({ tenantId, email, name: input.name, role, status: 'active', passwordHash });
     await userRepo.markLogin(user.id);
+    if (created) await seedNewTenant(user);
     return user;
   },
 

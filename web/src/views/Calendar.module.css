@@ -1,0 +1,286 @@
+/* Full-height column: header + day strip are fixed, the grid scrolls. */
+.page {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
+/* ── Header ── */
+.header {
+  flex: none;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 32px 14px;
+  flex-wrap: wrap;
+}
+.title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.sub {
+  font-size: 13px;
+  color: var(--text-3);
+  margin-top: 3px;
+}
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.syncBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border-2);
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.syncBtn:hover {
+  background: var(--surface-2);
+}
+
+/* ── Day-of-week strip ── */
+.dayRow {
+  flex: none;
+  display: flex;
+  padding: 0 32px;
+  border-bottom: 1px solid var(--border);
+}
+.gutterSpacer,
+.gutter {
+  width: 62px;
+  flex: none;
+}
+.dayHead {
+  flex: 1;
+  text-align: center;
+  padding: 7px 0 9px;
+}
+.dayLabel {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+}
+.dayNum {
+  font-size: 18px;
+  font-weight: 750;
+  margin-top: 1px;
+  color: var(--text);
+}
+.dayNumToday {
+  color: var(--accent);
+}
+
+/* ── Scrollable grid area ── */
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px 32px 28px;
+}
+.center {
+  display: flex;
+  justify-content: center;
+  padding: 60px 0;
+}
+.error {
+  margin: 20px 0;
+  font-size: 13px;
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px solid var(--border);
+  padding: 12px 14px;
+  border-radius: var(--radius);
+}
+
+.gridBody {
+  display: flex;
+  position: relative;
+}
+.hourLabel {
+  font-size: 11px;
+  color: var(--text-3);
+  text-align: right;
+  padding-right: 10px;
+  transform: translateY(-7px);
+}
+.col {
+  flex: 1;
+  position: relative;
+  border-left: 1px solid var(--border);
+}
+.hourCell {
+  border-top: 1px solid var(--border);
+}
+
+/* ── Event chips ── */
+.event {
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  border: none;
+  border-left: 3px solid var(--accent);
+  border-radius: 7px;
+  padding: 5px 8px;
+  cursor: pointer;
+  overflow: hidden;
+  text-align: left;
+  font-family: inherit;
+  transition: filter 0.12s ease;
+}
+.event:hover {
+  filter: brightness(0.96);
+}
+:root[data-theme='dark'] .event:hover {
+  filter: brightness(1.12);
+}
+.eventTitle {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text);
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.eventTime {
+  font-size: 10.5px;
+  color: var(--text-2);
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Event modal ── */
+.modalHead {
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.modalTitle {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+}
+.modalClose {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  border: none;
+  background: var(--bg);
+  color: var(--text-2);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease;
+}
+.modalClose:hover {
+  background: var(--surface-3);
+}
+.modalBody {
+  padding: 18px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+.fieldLabel {
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--text-2);
+  display: block;
+  margin-bottom: 6px;
+}
+.textInput,
+.select,
+.textArea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-2);
+  border-radius: 9px;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--surface);
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+.textInput:focus,
+.select:focus,
+.textArea:focus {
+  border-color: var(--accent);
+}
+.select {
+  cursor: pointer;
+}
+.textArea {
+  font-size: 13.5px;
+  line-height: 1.5;
+  resize: none;
+}
+.threeCol {
+  display: flex;
+  gap: 10px;
+}
+.dayCol {
+  flex: 1.4;
+  min-width: 0;
+}
+.hourColField {
+  flex: 1;
+  min-width: 0;
+}
+.swatches {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 2px;
+}
+.swatch {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.12s ease;
+}
+.swatch:hover {
+  transform: scale(1.08);
+}
+.modalFoot {
+  padding: 14px 22px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  background: var(--surface-2);
+}
+.cancelBtn {
+  margin-left: auto;
+}
+
+@media (max-width: 760px) {
+  .header,
+  .dayRow,
+  .scroll {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}

@@ -1,0 +1,154 @@
+.header {
+  padding: 22px 24px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.headRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.headIcon {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+.sub {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--text-2);
+  line-height: 1.55;
+}
+
+.body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.center {
+  display: flex;
+  justify-content: center;
+  padding: 40px 0;
+}
+.error {
+  font-size: 13px;
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+}
+.empty {
+  font-size: 13.5px;
+  color: var(--text-3);
+  text-align: center;
+  padding: 36px 16px;
+  line-height: 1.5;
+}
+
+.card {
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  padding: 14px;
+  background: var(--surface-2);
+  animation: irisRise 0.22s ease;
+}
+.cardTop {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.cardIcon {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  font-weight: 700;
+  font-size: 14px;
+}
+.cardBody {
+  flex: 1;
+  min-width: 0;
+}
+.metaRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.kind {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.dot,
+.target {
+  font-size: 11px;
+  color: var(--text-3);
+}
+.cardTitle {
+  font-size: 14px;
+  font-weight: 650;
+  margin-top: 3px;
+}
+.cardDetail {
+  font-size: 13px;
+  color: var(--text-2);
+  margin-top: 3px;
+  line-height: 1.5;
+}
+.statusPill {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--warn);
+  background: var(--warn-soft);
+  padding: 3px 9px;
+  border-radius: 99px;
+  white-space: nowrap;
+  height: fit-content;
+}
+.cardActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  padding-left: 46px;
+}
+
+.footer {
+  padding: 16px 22px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--surface-2);
+}
+.footNote {
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+.footActions {
+  display: flex;
+  gap: 9px;
+}

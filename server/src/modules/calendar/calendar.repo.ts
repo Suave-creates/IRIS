@@ -1,0 +1,130 @@
+import type { RowDataPacket } from 'mysql2/promise';
+import type { CalendarEvent } from '@iris/shared';
+import { execute, query } from '../../db/pool.js';
+import { id } from '../../lib/ids.js';
+
+/** Row shape for `calendar_events`. DATETIME/TIMESTAMP come back as strings (dateStrings). */
+export interface CalendarEventRow extends RowDataPacket {
+  id: string;
+  tenant_id: string;
+  user_id: string;
+  title: string;
+  start_at: string;
+  end_at: string;
+  color: string;
+  location: string | null;
+  notes: string | null;
+  attendees: number;
+  source: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Maps a DB row (snake_case) to the CalendarEvent DTO (camelCase). */
+export function toCalendarEvent(row: CalendarEventRow): CalendarEvent {
+  return {
+    id: row.id,
+    title: row.title,
+    startAt: row.start_at,
+    endAt: row.end_at,
+    color: row.color,
+    location: row.location ?? null,
+    notes: row.notes ?? null,
+    attendees: row.attendees,
+  };
+}
+
+export interface CreateEventInput {
+  tenantId: string;
+  userId: string;
+  title: string;
+  startAt: string;
+  endAt: string;
+  color: string;
+  location?: string | null;
+  notes?: string | null;
+}
+
+export interface UpdateEventInput {
+  title: string;
+  startAt: string;
+  endAt: string;
+  color: string;
+  location?: string | null;
+  notes?: string | null;
+}
+
+export const calendarRepo = {
+  /** Events overlapping [from, to) for a tenant, ordered by start. */
+  async listByTenantInRange(tenantId: string, from: string, to: string): Promise<CalendarEventRow[]> {
+    return query<CalendarEventRow[]>(
+      `SELECT * FROM calendar_events
+       WHERE tenant_id = :tid AND start_at < :to AND end_at > :from
+       ORDER BY start_at`,
+      { tid: tenantId, from, to },
+    );
+  },
+
+  /** Fetches a single event scoped to the tenant (tenant isolation). */
+  async findByIdForTenant(eventId: string, tenantId: string): Promise<CalendarEventRow | null> {
+    const rows = await query<CalendarEventRow[]>(
+      'SELECT * FROM calendar_events WHERE id = :id AND tenant_id = :tid',
+      { id: eventId, tid: tenantId },
+    );
+    return rows[0] ?? null;
+  },
+
+  async create(input: CreateEventInput): Promise<CalendarEventRow> {
+    const eventId = id('evt');
+    await execute(
+      `INSERT INTO calendar_events (id, tenant_id, user_id, title, start_at, end_at, color, location, notes)
+       VALUES (:id, :tid, :uid, :title, :start, :end, :color, :location, :notes)`,
+      {
+        id: eventId,
+        tid: input.tenantId,
+        uid: input.userId,
+        title: input.title,
+        start: input.startAt,
+        end: input.endAt,
+        color: input.color,
+        location: input.location ?? null,
+        notes: input.notes ?? null,
+      },
+    );
+    const created = await this.findByIdForTenant(eventId, input.tenantId);
+    if (!created) throw new Error('Failed to create calendar event');
+    return created;
+  },
+
+  /** Updates an event in place. Caller must have already verified tenant ownership. */
+  async update(eventId: string, tenantId: string, patch: UpdateEventInput): Promise<void> {
+    await execute(
+      `UPDATE calendar_events SET
+         title    = :title,
+         start_at = :start,
+         end_at   = :end,
+         color    = :color,
+         location = :location,
+         notes    = :notes
+       WHERE id = :id AND tenant_id = :tid`,
+      {
+        id: eventId,
+        tid: tenantId,
+        title: patch.title,
+        start: patch.startAt,
+        end: patch.endAt,
+        color: patch.color,
+        location: patch.location ?? null,
+        notes: patch.notes ?? null,
+      },
+    );
+  },
+
+  async delete(eventId: string, tenantId: string): Promise<number> {
+    const result = await execute(
+      'DELETE FROM calendar_events WHERE id = :id AND tenant_id = :tid',
+      { id: eventId, tid: tenantId },
+    );
+    return result.affectedRows;
+  },
+};

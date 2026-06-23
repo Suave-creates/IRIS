@@ -46,6 +46,14 @@
   max-height: 340px;
   overflow-y: auto;
 }
+.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28px 16px;
+  font-size: 13px;
+  color: var(--text-3);
+}
 .item {
   display: flex;
   gap: 11px;

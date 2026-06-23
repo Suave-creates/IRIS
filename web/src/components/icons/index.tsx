@@ -246,3 +246,17 @@ export const Lock = (p: IconProps) => (
     <path d="M8 11V7a4 4 0 0 1 8 0v4" />
   </Svg>
 );
+
+export const Database = (p: IconProps) => (
+  <Svg {...p} strokeWidth={p.strokeWidth ?? 1.8}>
+    <ellipse cx="12" cy="6" rx="8" ry="3" />
+    <path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3" />
+  </Svg>
+);
+
+export const FileText = (p: IconProps) => (
+  <Svg {...p} strokeWidth={p.strokeWidth ?? 1.8}>
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <path d="M14 2v6h6" />
+  </Svg>
+);

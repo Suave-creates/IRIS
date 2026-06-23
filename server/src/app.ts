@@ -7,9 +7,19 @@ import { env, isProd } from './config/env.js';
 import { Errors } from './lib/errors.js';
 import { loggerOptions } from './lib/logger.js';
 import { requestId } from './lib/ids.js';
+import { actionsRoutes } from './modules/actions/actions.routes.js';
+import { adminRoutes } from './modules/admin/admin.routes.js';
 import { authRoutes } from './modules/auth/auth.routes.js';
 import { registerAuthContext } from './modules/auth/guards.js';
+import { calendarRoutes } from './modules/calendar/calendar.routes.js';
+import { connectorsRoutes } from './modules/connectors/connectors.routes.js';
+import { dashboardRoutes } from './modules/dashboard/dashboard.routes.js';
 import { healthRoutes } from './modules/health/health.routes.js';
+import { journalRoutes } from './modules/journal/journal.routes.js';
+import { mailRoutes } from './modules/mail/mail.routes.js';
+import { memoryRoutes } from './modules/memory/memory.routes.js';
+import { notificationsRoutes } from './modules/notifications/notifications.routes.js';
+import { projectsRoutes } from './modules/projects/projects.routes.js';
 import { meRoutes } from './modules/users/me.routes.js';
 import { registerErrorHandling } from './plugins/errorHandler.js';
 
@@ -62,6 +72,16 @@ export async function buildApp(): Promise<FastifyInstance> {
       await api.register(healthRoutes, { prefix: '/health' });
       await api.register(authRoutes, { prefix: '/auth' });
       await api.register(meRoutes, { prefix: '/me' });
+      await api.register(dashboardRoutes, { prefix: '/dashboard' });
+      await api.register(projectsRoutes, { prefix: '/projects' });
+      await api.register(journalRoutes, { prefix: '/journal' });
+      await api.register(calendarRoutes, { prefix: '/calendar' });
+      await api.register(mailRoutes, { prefix: '/mail' });
+      await api.register(memoryRoutes, { prefix: '/memory' });
+      await api.register(connectorsRoutes, { prefix: '/connectors' });
+      await api.register(notificationsRoutes, { prefix: '/notifications' });
+      await api.register(actionsRoutes, { prefix: '/actions' });
+      await api.register(adminRoutes, { prefix: '/admin' });
     },
     { prefix: '/api' },
   );

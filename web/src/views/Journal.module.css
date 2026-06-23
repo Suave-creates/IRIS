@@ -1,0 +1,338 @@
+.page {
+  padding: 24px 32px 44px;
+  max-width: 1180px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+.header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+.title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.sub {
+  font-size: 13px;
+  color: var(--text-3);
+  margin-top: 3px;
+}
+
+/* ── Weekday header row ──────────────────────────────────────────────────── */
+.weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.weekday {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+  text-align: center;
+}
+
+/* ── Month grid ──────────────────────────────────────────────────────────── */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+}
+.blank {
+  min-height: 106px;
+  border-radius: 11px;
+  background: transparent;
+}
+.cell {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  min-height: 106px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cellToday {
+  background: var(--accent-soft);
+  border-color: rgba(var(--accent-rgb), 0.4);
+}
+
+.cellHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 22px;
+}
+.dayNum {
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--text-2);
+  padding-left: 4px;
+}
+.dayToday {
+  font-size: 12px;
+  font-weight: 750;
+  color: #fff;
+  background: var(--accent);
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.addBtn {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  border: none;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+}
+.addBtn:hover {
+  background: var(--surface-3);
+  color: var(--accent);
+}
+
+/* ── Task chips ──────────────────────────────────────────────────────────── */
+.chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  width: 100%;
+  text-align: left;
+  border-radius: 6px;
+  padding: 3px 7px;
+  cursor: pointer;
+  transition: filter 0.12s ease;
+  font-family: inherit;
+}
+.chip:hover {
+  filter: brightness(0.97);
+}
+:root[data-theme='dark'] .chip:hover {
+  filter: brightness(1.12);
+}
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: none;
+}
+.chipTitle {
+  font-size: 11px;
+  font-weight: 550;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chipDone {
+  text-decoration: line-through;
+  color: var(--text-3);
+}
+.more {
+  font-size: 10.5px;
+  color: var(--text-3);
+  padding-left: 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+}
+.more:hover {
+  color: var(--accent);
+}
+
+/* Priority chip palettes (soft bg + dot), mapped to status tokens. */
+.priHigh {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.priHigh .dot {
+  background: var(--danger);
+}
+.priMed {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.priMed .dot {
+  background: var(--warn);
+}
+.priLow {
+  background: var(--success-soft);
+  color: var(--success);
+}
+.priLow .dot {
+  background: var(--success);
+}
+
+/* ── Loading / error ─────────────────────────────────────────────────────── */
+.center {
+  display: flex;
+  justify-content: center;
+  padding: 60px;
+}
+.error {
+  margin: 18px 0 0;
+  font-size: 13px;
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px solid rgba(209, 67, 67, 0.25);
+  padding: 10px 14px;
+  border-radius: 10px;
+}
+
+/* ── Task modal ──────────────────────────────────────────────────────────── */
+.modalHead {
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.modalTitle {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+}
+.closeBtn {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  border: none;
+  background: var(--bg);
+  color: var(--text-2);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s ease;
+}
+.closeBtn:hover {
+  background: var(--surface-3);
+}
+.modalBody {
+  padding: 18px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+.row2 {
+  display: flex;
+  gap: 10px;
+}
+.colDay {
+  flex: 1.5;
+}
+.colTime {
+  flex: 1;
+}
+.select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-2);
+  border-radius: 9px;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--surface);
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+.select:focus {
+  border-color: var(--accent);
+}
+.timeInput {
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+}
+
+/* Priority segmented control */
+.priRow {
+  display: flex;
+  gap: 8px;
+}
+.priSeg {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 650;
+  padding: 9px 0;
+  border-radius: 9px;
+  border: 1px solid var(--border-2);
+  background: var(--surface);
+  color: var(--text-2);
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease;
+  font-family: inherit;
+}
+.priSeg:hover {
+  border-color: var(--border-2);
+  background: var(--bg);
+}
+.priSegHigh {
+  border-color: rgba(209, 67, 67, 0.45);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.priSegMed {
+  border-color: rgba(199, 119, 0, 0.45);
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.priSegLow {
+  border-color: rgba(31, 157, 87, 0.45);
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+/* Done toggle row */
+.doneRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 13px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+.doneLabel {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.modalFoot {
+  padding: 14px 22px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  background: var(--surface-2);
+}
+.spacer {
+  margin-left: auto;
+}

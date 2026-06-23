@@ -26,6 +26,7 @@
     "db:migrate": "npm run db:migrate --workspace server",
     "db:status": "npm run db:status --workspace server",
     "db:seed": "npm run db:seed --workspace server",
+    "db:seed:demo": "npm run db:seed:demo --workspace server",
     "test": "npm run test --workspaces --if-present"
   },
   "devDependencies": {

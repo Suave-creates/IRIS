@@ -1,48 +1,41 @@
+import { Spinner } from '@/components/primitives';
+import { relativeTime } from '@/lib/time';
+import { useMarkAllRead, useNotifications } from '@/features/notifications/useNotifications';
 import styles from './NotificationsMenu.module.css';
 
-interface NotificationItem {
-  id: number;
-  title: string;
-  text: string;
-  time: string;
-  dot: string;
-  unread: boolean;
-}
-
-/**
- * M0 placeholder feed mirroring the design. Replaced in M2 by a live
- * notifications query (tenant-scoped).
- */
-const DEMO_NOTIFICATIONS: NotificationItem[] = [
-  { id: 1, title: 'David Chen replied', text: 'Re: Acme renewal — open to a 2-year deal with onboarding.', time: '2m', dot: 'var(--danger)', unread: true },
-  { id: 2, title: 'Priya is waiting on you', text: 'Q3 hiring plan needs your approval to proceed.', time: '1h', dot: 'var(--warn)', unread: true },
-  { id: 3, title: 'IRIS prepared 5 actions', text: 'From your latest conversation — review & approve.', time: '2h', dot: 'var(--accent)', unread: true },
-  { id: 4, title: 'Board deck due Thursday', text: '2 sections remaining before the board meeting.', time: '5h', dot: 'var(--info)', unread: false },
-  { id: 5, title: 'Warm intro from Maya', text: 'Connected you with a Sequoia partner for the raise.', time: '1d', dot: 'var(--success)', unread: false },
-];
-
 export function NotificationsMenu({ onClose }: { onClose: () => void }) {
-  const unread = DEMO_NOTIFICATIONS.filter((n) => n.unread).length;
+  const { data: notifications, isLoading } = useNotifications();
+  const markAll = useMarkAllRead();
+  const unread = notifications?.filter((n) => !n.read).length ?? 0;
+
   return (
     <>
       <div className={styles.scrim} onClick={onClose} />
       <div className={styles.menu} role="menu">
         <div className={styles.header}>
           <span className={styles.title}>
-            Notifications <span className={styles.badge}>{unread}</span>
+            Notifications {unread > 0 && <span className={styles.badge}>{unread}</span>}
           </span>
-          <span className={styles.markRead}>Mark all read</span>
+          <span className={styles.markRead} onClick={() => markAll.mutate()}>
+            Mark all read
+          </span>
         </div>
         <div className={styles.list}>
-          {DEMO_NOTIFICATIONS.map((n) => (
-            <div key={n.id} className={styles.item}>
-              <span className={styles.dot} style={{ background: n.dot }} />
+          {isLoading && (
+            <div className={styles.empty}>
+              <Spinner size={18} />
+            </div>
+          )}
+          {!isLoading && (notifications?.length ?? 0) === 0 && <div className={styles.empty}>You're all caught up.</div>}
+          {notifications?.map((n) => (
+            <div key={n.id} className={styles.item} style={{ opacity: n.read ? 0.7 : 1 }}>
+              <span className={styles.dot} style={{ background: n.dotColor }} />
               <div className={styles.body}>
                 <div className={styles.row}>
                   <span className={styles.itemTitle}>{n.title}</span>
-                  <span className={styles.time}>{n.time}</span>
+                  <span className={styles.time}>{relativeTime(n.createdAt)}</span>
                 </div>
-                <div className={styles.text}>{n.text}</div>
+                <div className={styles.text}>{n.body}</div>
               </div>
             </div>
           ))}

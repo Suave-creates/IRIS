@@ -6,6 +6,14 @@ import { Login } from '@/features/auth/Login';
 import { ViewPage } from '@/views/ViewPage';
 import { Welcome } from '@/views/Welcome';
 import { Settings } from '@/views/Settings';
+import { Dashboard } from '@/views/Dashboard';
+import { Projects } from '@/views/Projects';
+import { Journal } from '@/views/Journal';
+import { Calendar } from '@/views/Calendar';
+import { Mail } from '@/views/Mail';
+import { Memory } from '@/views/Memory';
+import { Connectors } from '@/views/Connectors';
+import { Admin } from '@/views/Admin';
 import { NotFound } from '@/views/NotFound';
 
 const p = (path: string) => path.slice(1);
@@ -19,18 +27,18 @@ export const router = createBrowserRouter([
         path: '/',
         element: <AppShell />,
         children: [
-          { index: true, element: <ViewPage view="dashboard" /> },
+          { index: true, element: <Dashboard /> },
           { path: p(VIEW_PATHS.onboarding), element: <Welcome /> },
           { path: p(VIEW_PATHS.chat), element: <ViewPage view="chat" /> },
-          { path: p(VIEW_PATHS.projects), element: <ViewPage view="projects" /> },
-          { path: p(VIEW_PATHS.mail), element: <ViewPage view="mail" /> },
-          { path: p(VIEW_PATHS.calendar), element: <ViewPage view="calendar" /> },
-          { path: p(VIEW_PATHS.journal), element: <ViewPage view="journal" /> },
+          { path: p(VIEW_PATHS.projects), element: <Projects /> },
+          { path: p(VIEW_PATHS.mail), element: <Mail /> },
+          { path: p(VIEW_PATHS.calendar), element: <Calendar /> },
+          { path: p(VIEW_PATHS.journal), element: <Journal /> },
           { path: p(VIEW_PATHS.whiteboard), element: <ViewPage view="whiteboard" /> },
           { path: p(VIEW_PATHS.knowledge), element: <ViewPage view="knowledge" /> },
-          { path: p(VIEW_PATHS.connectors), element: <ViewPage view="connectors" /> },
-          { path: p(VIEW_PATHS.memory), element: <ViewPage view="memory" /> },
-          { path: p(VIEW_PATHS.admin), element: <ViewPage view="admin" /> },
+          { path: p(VIEW_PATHS.connectors), element: <Connectors /> },
+          { path: p(VIEW_PATHS.memory), element: <Memory /> },
+          { path: p(VIEW_PATHS.admin), element: <Admin /> },
           { path: p(VIEW_PATHS.settings), element: <Settings /> },
           { path: p(VIEW_PATHS.architecture), element: <ViewPage view="architecture" /> },
           { path: '*', element: <NotFound /> },
