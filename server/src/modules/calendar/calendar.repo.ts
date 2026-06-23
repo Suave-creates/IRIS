@@ -20,13 +20,24 @@ export interface CalendarEventRow extends RowDataPacket {
   updated_at: string;
 }
 
+/**
+ * The DB stores UTC wall-clock and returns "YYYY-MM-DD HH:MM:SS" (dateStrings: true).
+ * Browsers parse that ambiguously (often as local time, or fail outright), which made
+ * events collapse to the grid's start hour. Normalize to unambiguous ISO-8601 Z.
+ */
+function toIso(dt: string): string {
+  if (!dt) return dt;
+  const d = new Date(/[TZ]/.test(dt) ? dt : `${dt.replace(' ', 'T')}Z`);
+  return Number.isNaN(d.getTime()) ? dt : d.toISOString();
+}
+
 /** Maps a DB row (snake_case) to the CalendarEvent DTO (camelCase). */
 export function toCalendarEvent(row: CalendarEventRow): CalendarEvent {
   return {
     id: row.id,
     title: row.title,
-    startAt: row.start_at,
-    endAt: row.end_at,
+    startAt: toIso(row.start_at),
+    endAt: toIso(row.end_at),
     color: row.color,
     location: row.location ?? null,
     notes: row.notes ?? null,
@@ -43,6 +54,12 @@ export interface CreateEventInput {
   color: string;
   location?: string | null;
   notes?: string | null;
+  /** Explicit id (e.g. evtg_<googleId>) — defaults to a fresh evt_ id. */
+  id?: string;
+  /** Origin tag: 'manual' (default) or 'gcalendar' when mirrored from Google. */
+  source?: string;
+  /** Guest count to store. */
+  attendees?: number;
 }
 
 export interface UpdateEventInput {
@@ -75,10 +92,12 @@ export const calendarRepo = {
   },
 
   async create(input: CreateEventInput): Promise<CalendarEventRow> {
-    const eventId = id('evt');
+    const eventId = input.id ?? id('evt');
     await execute(
-      `INSERT INTO calendar_events (id, tenant_id, user_id, title, start_at, end_at, color, location, notes)
-       VALUES (:id, :tid, :uid, :title, :start, :end, :color, :location, :notes)`,
+      `INSERT INTO calendar_events (id, tenant_id, user_id, title, start_at, end_at, color, location, notes, attendees, source)
+       VALUES (:id, :tid, :uid, :title, :start, :end, :color, :location, :notes, :att, :source)
+       ON DUPLICATE KEY UPDATE title=VALUES(title), start_at=VALUES(start_at), end_at=VALUES(end_at),
+         color=VALUES(color), location=VALUES(location), notes=VALUES(notes), attendees=VALUES(attendees)`,
       {
         id: eventId,
         tid: input.tenantId,
@@ -89,6 +108,8 @@ export const calendarRepo = {
         color: input.color,
         location: input.location ?? null,
         notes: input.notes ?? null,
+        att: input.attendees ?? 0,
+        source: input.source ?? 'manual',
       },
     );
     const created = await this.findByIdForTenant(eventId, input.tenantId);

@@ -30,7 +30,7 @@ export function useCreateEvent(from: string, to: string) {
         color: input.color,
         location: input.location ?? null,
         notes: input.notes ?? null,
-        attendees: 0,
+        attendees: input.attendees?.length ?? 0,
       };
       qc.setQueryData<CalendarEvent[]>(key, [...(prev ?? []), temp]);
       return { prev };
@@ -51,7 +51,20 @@ export function useUpdateEvent(from: string, to: string) {
       await qc.cancelQueries({ queryKey: key });
       const prev = qc.getQueryData<CalendarEvent[]>(key);
       qc.setQueryData<CalendarEvent[]>(key, (list) =>
-        (list ?? []).map((e) => (e.id === id ? { ...e, ...input, location: input.location ?? null, notes: input.notes ?? null } : e)),
+        (list ?? []).map((e) =>
+          e.id === id
+            ? {
+                ...e,
+                title: input.title,
+                startAt: input.startAt,
+                endAt: input.endAt,
+                color: input.color,
+                location: input.location ?? null,
+                notes: input.notes ?? null,
+                attendees: input.attendees?.length ?? e.attendees,
+              }
+            : e,
+        ),
       );
       return { prev };
     },

@@ -50,6 +50,36 @@
 .syncBtn:hover {
   background: var(--surface-2);
 }
+.weekNav {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid var(--border-2);
+  border-radius: 10px;
+  padding: 2px;
+  background: var(--surface);
+}
+.navBtn {
+  min-width: 30px;
+  height: 28px;
+  padding: 0 9px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.navBtn:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.navBtn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
 
 /* ── Day-of-week strip ── */
 .dayRow {
@@ -234,6 +264,42 @@
   font-size: 13.5px;
   line-height: 1.5;
   resize: none;
+}
+.guestChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.guestChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 6px 4px 9px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.guestChip button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  opacity: 0.7;
+}
+.guestChip button:hover {
+  opacity: 1;
+}
+.guestHint {
+  font-size: 11px;
+  color: var(--text-3);
+  margin-top: 5px;
 }
 .threeCol {
   display: flex;

@@ -114,6 +114,8 @@ export interface CalendarEventInput {
   color: string;
   location?: string | null;
   notes?: string | null;
+  /** Guest email addresses to invite via Google Calendar. */
+  attendees?: string[];
 }
 
 // ── Mail ──────────────────────────────────────────────────────────────────

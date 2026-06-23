@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { CalendarEvent, CalendarEventInput } from '@iris/shared';
 import { Button, Modal, Spinner } from '@/components/primitives';
-import { Plus, Refresh, X } from '@/components/icons';
+import { Plus, X } from '@/components/icons';
 import { ApiError } from '@/lib/api';
 import {
   useCalendarEvents,
@@ -47,6 +47,15 @@ function sameDay(a: Date, b: Date): boolean {
 function hourFloat(d: Date): number {
   return d.getHours() + d.getMinutes() / 60;
 }
+const pad2 = (n: number) => String(n).padStart(2, '0');
+/** Local date as YYYY-MM-DD for a <input type="date">. */
+function toDateStr(d: Date): string {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+/** Local time as HH:MM for a <input type="time">. */
+function toTimeStr(d: Date): string {
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
 function fmtHourLabel(h: number): string {
   const period = h < 12 || h === 24 ? 'AM' : 'PM';
   const display = h % 12 === 0 ? 12 : h % 12;
@@ -66,15 +75,18 @@ function fmtTimeRange(start: Date, end: Date): string {
 interface EventForm {
   id: string | null; // null = creating
   title: string;
-  dayIndex: number; // 0..6 within the week
-  startHour: number;
-  endHour: number;
+  date: string; // YYYY-MM-DD (local)
+  start: string; // HH:MM (local)
+  end: string; // HH:MM (local)
   color: string;
+  location: string;
+  guests: string[];
   notes: string;
 }
 
 export function Calendar() {
-  const weekStart = useMemo(() => startOfWeek(new Date()), []);
+  const [weekOffset, setWeekOffset] = useState(0);
+  const weekStart = useMemo(() => addDays(startOfWeek(new Date()), weekOffset * 7), [weekOffset]);
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
   const weekEnd = useMemo(() => addDays(weekStart, 7), [weekStart]);
 
@@ -89,8 +101,16 @@ export function Calendar() {
   const [form, setForm] = useState<EventForm | null>(null);
   const today = new Date();
 
-  // Header label: "June 2026 · This week".
-  const headerLabel = `${MONTHS[weekStart.getMonth()]} ${weekStart.getFullYear()} · This week`;
+  // Header label: "June 2026 · This week" (relative to the viewed week).
+  const relLabel =
+    weekOffset === 0
+      ? 'This week'
+      : weekOffset === 1
+        ? 'Next week'
+        : weekOffset === -1
+          ? 'Last week'
+          : `Week of ${(MONTHS[weekStart.getMonth()] ?? '').slice(0, 3)} ${weekStart.getDate()}`;
+  const headerLabel = `${MONTHS[weekStart.getMonth()]} ${weekStart.getFullYear()} · ${relLabel}`;
 
   // Group events into day columns and project them onto the time grid.
   const columns = useMemo(() => {
@@ -112,14 +132,16 @@ export function Calendar() {
 
   function openCreate() {
     // Default to today if it's in this week, else Monday; 9–10am.
-    const todayIndex = days.findIndex((d) => sameDay(d, today));
+    const base = days.find((d) => sameDay(d, today)) ?? weekStart;
     setForm({
       id: null,
       title: '',
-      dayIndex: todayIndex >= 0 ? todayIndex : 0,
-      startHour: 9,
-      endHour: 10,
+      date: toDateStr(base),
+      start: '09:00',
+      end: '10:00',
       color: DEFAULT_COLOR,
+      location: '',
+      guests: [],
       notes: '',
     });
   }
@@ -127,14 +149,15 @@ export function Calendar() {
   function openEdit(e: CalendarEvent) {
     const start = new Date(e.startAt);
     const end = new Date(e.endAt);
-    const dayIndex = days.findIndex((d) => sameDay(d, start));
     setForm({
       id: e.id,
       title: e.title,
-      dayIndex: dayIndex >= 0 ? dayIndex : 0,
-      startHour: Math.round(hourFloat(start)),
-      endHour: Math.max(Math.round(hourFloat(end)), Math.round(hourFloat(start)) + 1),
+      date: toDateStr(start),
+      start: toTimeStr(start),
+      end: toTimeStr(end),
       color: e.color,
+      location: e.location ?? '',
+      guests: [],
       notes: e.notes ?? '',
     });
   }
@@ -143,24 +166,30 @@ export function Calendar() {
     setForm(null);
   }
 
-  function buildInput(f: EventForm): CalendarEventInput {
-    const day = days[f.dayIndex] ?? weekStart;
-    const start = new Date(day);
-    start.setHours(f.startHour, 0, 0, 0);
-    const end = new Date(day);
-    end.setHours(Math.max(f.endHour, f.startHour + 1), 0, 0, 0);
+  /** Returns the built input, or null if the date/time is incomplete. */
+  function buildInput(f: EventForm): CalendarEventInput | null {
+    if (!f.date || !f.start) return null;
+    const start = new Date(`${f.date}T${f.start}`);
+    let end = f.end ? new Date(`${f.date}T${f.end}`) : start;
+    if (Number.isNaN(start.getTime())) return null;
+    if (Number.isNaN(end.getTime()) || end.getTime() <= start.getTime()) {
+      end = new Date(start.getTime() + 60 * 60 * 1000); // default to a 1-hour event
+    }
     return {
       title: f.title.trim() || 'Untitled event',
       startAt: start.toISOString(),
       endAt: end.toISOString(),
       color: f.color,
+      location: f.location.trim() ? f.location.trim() : null,
       notes: f.notes.trim() ? f.notes.trim() : null,
+      attendees: f.guests,
     };
   }
 
   function save() {
     if (!form) return;
     const input = buildInput(form);
+    if (!input) return;
     if (form.id) {
       updateEvent.mutate({ id: form.id, input });
     } else {
@@ -185,10 +214,32 @@ export function Calendar() {
           <div className={styles.sub}>Connected to Google Calendar · last sync just now</div>
         </div>
         <div className={styles.actions}>
-          <button type="button" className={styles.syncBtn} title="Sync (coming soon)">
-            <Refresh size={15} />
-            Sync
-          </button>
+          <div className={styles.weekNav}>
+            <button
+              type="button"
+              className={styles.navBtn}
+              onClick={() => setWeekOffset((o) => o - 1)}
+              aria-label="Previous week"
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              className={styles.navBtn}
+              onClick={() => setWeekOffset(0)}
+              disabled={weekOffset === 0}
+            >
+              Today
+            </button>
+            <button
+              type="button"
+              className={styles.navBtn}
+              onClick={() => setWeekOffset((o) => o + 1)}
+              aria-label="Next week"
+            >
+              ›
+            </button>
+          </div>
           <Button size="sm" leftIcon={<Plus size={15} />} onClick={openCreate}>
             New event
           </Button>
@@ -258,7 +309,8 @@ export function Calendar() {
 
       <EventModal
         form={form}
-        days={days}
+        minDate={toDateStr(weekStart)}
+        maxDate={toDateStr(addDays(weekStart, 6))}
         onChange={setForm}
         onClose={close}
         onSave={save}
@@ -273,7 +325,8 @@ export function Calendar() {
 // ── Event modal ─────────────────────────────────────────────────────────────
 function EventModal({
   form,
-  days,
+  minDate,
+  maxDate,
   onChange,
   onClose,
   onSave,
@@ -282,7 +335,8 @@ function EventModal({
   deleting,
 }: {
   form: EventForm | null;
-  days: Date[];
+  minDate: string;
+  maxDate: string;
   onChange: (f: EventForm) => void;
   onClose: () => void;
   onSave: () => void;
@@ -290,21 +344,26 @@ function EventModal({
   saving: boolean;
   deleting: boolean;
 }) {
+  const [guestInput, setGuestInput] = useState('');
   if (!form) return null;
   const editing = form.id !== null;
+  const isEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
 
-  const dayOpts = days.map((d, i) => {
-    const wd = WEEKDAY_LABELS[i] ?? '';
-    const titleCase = wd.charAt(0) + wd.slice(1).toLowerCase();
-    const month = (MONTHS[d.getMonth()] ?? '').slice(0, 3);
-    return { v: i, label: `${titleCase}, ${month} ${d.getDate()}` };
-  });
-  const hourOpts = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => START_HOUR + i);
+  const addGuest = () => {
+    const g = guestInput.trim().toLowerCase();
+    if (!isEmail(g) || form.guests.includes(g)) {
+      setGuestInput('');
+      return;
+    }
+    onChange({ ...form, guests: [...form.guests, g] });
+    setGuestInput('');
+  };
+  const removeGuest = (g: string) => onChange({ ...form, guests: form.guests.filter((x) => x !== g) });
 
   return (
-    <Modal open onClose={onClose} width={440} ariaLabel="Event details">
+    <Modal open onClose={onClose} width={460} ariaLabel="Event details">
       <div className={styles.modalHead}>
-        <h2 className={styles.modalTitle}>Event details</h2>
+        <h2 className={styles.modalTitle}>{editing ? 'Event details' : 'New event'}</h2>
         <button type="button" className={styles.modalClose} onClick={onClose} aria-label="Close">
           <X size={14} />
         </button>
@@ -324,52 +383,75 @@ function EventModal({
 
         <div className={styles.threeCol}>
           <div className={styles.dayCol}>
-            <label className={styles.fieldLabel}>Day</label>
-            <select
-              className={styles.select}
-              value={form.dayIndex}
-              onChange={(e) => onChange({ ...form, dayIndex: Number(e.target.value) })}
-            >
-              {dayOpts.map((o) => (
-                <option key={o.v} value={o.v}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+            <label className={styles.fieldLabel}>Date</label>
+            <input
+              type="date"
+              className={styles.textInput}
+              value={form.date}
+              min={minDate}
+              max={maxDate}
+              onChange={(e) => onChange({ ...form, date: e.target.value })}
+            />
           </div>
           <div className={styles.hourColField}>
             <label className={styles.fieldLabel}>Start</label>
-            <select
-              className={styles.select}
-              value={form.startHour}
-              onChange={(e) => {
-                const start = Number(e.target.value);
-                onChange({ ...form, startHour: start, endHour: Math.max(form.endHour, start + 1) });
-              }}
-            >
-              {hourOpts.map((h) => (
-                <option key={h} value={h}>
-                  {fmtHourLabel(h)}
-                </option>
-              ))}
-            </select>
+            <input
+              type="time"
+              className={styles.textInput}
+              value={form.start}
+              onChange={(e) => onChange({ ...form, start: e.target.value })}
+            />
           </div>
           <div className={styles.hourColField}>
             <label className={styles.fieldLabel}>End</label>
-            <select
-              className={styles.select}
-              value={form.endHour}
-              onChange={(e) => onChange({ ...form, endHour: Number(e.target.value) })}
-            >
-              {hourOpts
-                .filter((h) => h > form.startHour)
-                .map((h) => (
-                  <option key={h} value={h}>
-                    {fmtHourLabel(h)}
-                  </option>
-                ))}
-            </select>
+            <input
+              type="time"
+              className={styles.textInput}
+              value={form.end}
+              onChange={(e) => onChange({ ...form, end: e.target.value })}
+            />
           </div>
+        </div>
+
+        <div>
+          <label className={styles.fieldLabel}>Location</label>
+          <input
+            className={styles.textInput}
+            value={form.location}
+            onChange={(e) => onChange({ ...form, location: e.target.value })}
+            placeholder="Room, address, or video link"
+          />
+        </div>
+
+        <div>
+          <label className={styles.fieldLabel}>Guests</label>
+          {form.guests.length > 0 && (
+            <div className={styles.guestChips}>
+              {form.guests.map((g) => (
+                <span key={g} className={styles.guestChip}>
+                  {g}
+                  <button type="button" onClick={() => removeGuest(g)} aria-label={`Remove ${g}`}>
+                    <X size={11} strokeWidth={2.4} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+          <input
+            className={styles.textInput}
+            value={guestInput}
+            onChange={(e) => setGuestInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ',') {
+                e.preventDefault();
+                addGuest();
+              }
+            }}
+            onBlur={addGuest}
+            placeholder="guest@email.com — Enter to add"
+            inputMode="email"
+          />
+          <div className={styles.guestHint}>Guests are invited via your Google Calendar.</div>
         </div>
 
         <div>
@@ -398,7 +480,7 @@ function EventModal({
             className={styles.textArea}
             value={form.notes}
             onChange={(e) => onChange({ ...form, notes: e.target.value })}
-            placeholder="Add details, location, or agenda…"
+            placeholder="Add details or an agenda…"
             rows={2}
           />
         </div>

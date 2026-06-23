@@ -2,6 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { CalendarEvent } from '@iris/shared';
 import { Errors } from '../../lib/errors.js';
+import { googleClient } from '../../connectors/google/client.js';
+import { createCalendarEvent } from '../../connectors/google/calendar.js';
 import { currentUser, requireAuth } from '../auth/guards.js';
 import { calendarRepo, toCalendarEvent } from './calendar.repo.js';
 
@@ -14,6 +16,8 @@ const eventBodySchema = z.object({
   color: z.string().regex(HEX_COLOR, 'Color must be a 7-char hex like #4b49d6'),
   location: z.string().trim().max(160).nullish(),
   notes: z.string().trim().max(10_000).nullish(),
+  /** Guest email addresses to invite via Google Calendar. */
+  attendees: z.array(z.string().trim().max(320)).max(50).optional(),
 });
 
 const rangeQuerySchema = z.object({
@@ -68,6 +72,32 @@ export async function calendarRoutes(app: FastifyInstance): Promise<void> {
     if (new Date(body.endAt).getTime() <= new Date(body.startAt).getTime()) {
       throw Errors.validation('`endAt` must be after `startAt`.');
     }
+
+    // Reflect into the user's Google Calendar (and invite guests) when connected.
+    // On failure (usually the calendar.events scope not yet granted) we still save locally.
+    let gid: string | undefined;
+    let source: string | undefined;
+    let attendees = 0;
+    if (await googleClient.isConnected(me.tenantId)) {
+      try {
+        const g = await createCalendarEvent(me.tenantId, {
+          title: body.title,
+          startAt: body.startAt,
+          endAt: body.endAt,
+          location: body.location ?? null,
+          notes: body.notes ?? null,
+          attendees: body.attendees ?? [],
+        });
+        if (g.googleId) {
+          gid = `evtg_${g.googleId}`.slice(0, 40);
+          source = 'gcalendar';
+          attendees = g.attendees;
+        }
+      } catch (err) {
+        req.log.warn({ err }, 'Google Calendar create failed; saving event locally only');
+      }
+    }
+
     const row = await calendarRepo.create({
       tenantId: me.tenantId,
       userId: me.id,
@@ -77,6 +107,9 @@ export async function calendarRoutes(app: FastifyInstance): Promise<void> {
       color: body.color,
       location: body.location ?? null,
       notes: body.notes ?? null,
+      id: gid,
+      source,
+      attendees,
     });
     reply.code(201);
     return { data: toCalendarEvent(row) };
