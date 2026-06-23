@@ -45,9 +45,10 @@ interface GmailMessage {
 }
 
 export async function syncGmail(tenantId: string): Promise<SyncResult> {
+  const listQs = new URLSearchParams({ maxResults: '15', q: 'newer_than:30d' }).toString();
   const list = await googleClient.get<GmailList>(
     tenantId,
-    'https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=15&q=newer_than:30d',
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages?${listQs}`,
   );
   const ids = (list.messages ?? []).slice(0, 15);
   let imported = 0;
@@ -141,16 +142,26 @@ interface DriveList {
   files?: { id: string; name: string; mimeType: string }[];
 }
 export async function syncDrive(tenantId: string): Promise<SyncResult> {
-  const data = await googleClient.get<DriveList>(
-    tenantId,
-    'https://www.googleapis.com/drive/v3/files?pageSize=20&orderBy=modifiedTime%20desc&fields=files(id,name,mimeType)',
-  );
+  const qs = new URLSearchParams({
+    pageSize: '20',
+    orderBy: 'modifiedTime desc',
+    fields: 'files(id,name,mimeType)',
+    supportsAllDrives: 'true',
+    includeItemsFromAllDrives: 'true',
+    corpora: 'allDrives',
+  }).toString();
+  const data = await googleClient.get<DriveList>(tenantId, `https://www.googleapis.com/drive/v3/files?${qs}`);
   return { imported: data.files?.length ?? 0, detail: `${data.files?.length ?? 0} files` };
 }
 export async function syncSheets(tenantId: string): Promise<SyncResult> {
-  const data = await googleClient.get<DriveList>(
-    tenantId,
-    "https://www.googleapis.com/drive/v3/files?pageSize=20&q=mimeType%3D'application%2Fvnd.google-apps.spreadsheet'&fields=files(id,name,mimeType)",
-  );
+  const qs = new URLSearchParams({
+    pageSize: '20',
+    q: "mimeType='application/vnd.google-apps.spreadsheet' and trashed=false",
+    fields: 'files(id,name,mimeType)',
+    supportsAllDrives: 'true',
+    includeItemsFromAllDrives: 'true',
+    corpora: 'allDrives',
+  }).toString();
+  const data = await googleClient.get<DriveList>(tenantId, `https://www.googleapis.com/drive/v3/files?${qs}`);
   return { imported: data.files?.length ?? 0, detail: `${data.files?.length ?? 0} sheets` };
 }

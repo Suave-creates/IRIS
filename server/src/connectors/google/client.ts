@@ -53,10 +53,17 @@ async function request<T>(tenantId: string, url: string, init?: RequestInit): Pr
 export const googleClient = {
   isConnected: async (tenantId: string) => (await vault.get(tenantId, GOOGLE_GRANT)) !== null,
   get: <T>(tenantId: string, url: string) => request<T>(tenantId, url),
-  /** Fetches a URL and returns the raw response body as text (e.g. Drive export). */
+  /**
+   * Fetches a URL and returns the raw response body as text (e.g. Drive export).
+   * Throws on a non-ok response so blocked/forbidden reads surface as failures
+   * rather than being silently treated as empty content.
+   */
   getText: async (tenantId: string, url: string): Promise<string> => {
     const res = await rawRequest(tenantId, url);
-    if (!res.ok) return '';
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw Errors.upstream(`Google API error (${res.status}): ${text.slice(0, 160)}`, 'Try reconnecting Google.');
+    }
     return res.text();
   },
   post: <T>(tenantId: string, url: string, body: unknown, contentType = 'application/json') =>
