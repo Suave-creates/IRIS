@@ -30,6 +30,18 @@ const csv = z
   .string()
   .transform((s) => s.split(',').map((v) => v.trim()).filter(Boolean));
 
+/**
+ * A comma-separated domain list, tolerant of common hand-edited formats:
+ * `a, b`, `[a, b]`, `"a","b"`. Strips brackets/quotes/whitespace and lowercases.
+ */
+const domainList = z.string().transform((s) =>
+  s
+    .replace(/[[\]"']/g, '')
+    .split(',')
+    .map((v) => v.trim().toLowerCase())
+    .filter(Boolean),
+);
+
 const boolish = z
   .union([z.boolean(), z.string()])
   .transform((v) => (typeof v === 'boolean' ? v : ['1', 'true', 'yes', 'on'].includes(v.toLowerCase())));
@@ -62,7 +74,7 @@ const EnvSchema = z
     SESSION_TTL_DAYS: z.coerce.number().int().positive().default(30),
     AUTH_PASSWORD_ENABLED: boolish.default('false'),
     /** Restrict SSO sign-in to these email domains. Empty = allow any domain. */
-    AUTH_ALLOWED_DOMAINS: csv.default(''),
+    AUTH_ALLOWED_DOMAINS: domainList.default(''),
 
     GOOGLE_CLIENT_ID: z.string().default(''),
     GOOGLE_CLIENT_SECRET: z.string().default(''),
