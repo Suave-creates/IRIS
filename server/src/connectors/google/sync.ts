@@ -1,5 +1,6 @@
 import { execute } from '../../db/pool.js';
 import { googleClient } from './client.js';
+import { triageEmails } from './mail.triage.js';
 
 export interface SyncResult {
   imported: number;
@@ -37,11 +38,54 @@ function displayName(from: string): string {
 interface GmailList {
   messages?: { id: string }[];
 }
+interface GmailPayload {
+  mimeType?: string;
+  headers?: { name: string; value: string }[];
+  body?: { data?: string };
+  parts?: GmailPayload[];
+}
 interface GmailMessage {
   id: string;
   snippet?: string;
   internalDate?: string;
-  payload?: { headers?: { name: string; value: string }[] };
+  payload?: GmailPayload;
+}
+
+const MAX_MAIL_BODY = 4_000;
+
+function decodeB64Url(data?: string): string {
+  if (!data) return '';
+  try {
+    return Buffer.from(data, 'base64url').toString('utf8');
+  } catch {
+    return '';
+  }
+}
+function stripHtml(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&');
+}
+/** Depth-first search for the first part of a given MIME type that carries data. */
+function findPart(payload: GmailPayload, mime: string): GmailPayload | null {
+  if (payload.mimeType === mime && payload.body?.data) return payload;
+  for (const p of payload.parts ?? []) {
+    const found = findPart(p, mime);
+    if (found) return found;
+  }
+  return null;
+}
+/** Best-effort plain-text body: prefer text/plain, else stripped text/html, else top-level body. */
+function extractPlainText(payload?: GmailPayload): string {
+  if (!payload) return '';
+  const plain = findPart(payload, 'text/plain');
+  if (plain) return decodeB64Url(plain.body?.data);
+  const html = findPart(payload, 'text/html');
+  if (html) return stripHtml(decodeB64Url(html.body?.data));
+  return decodeB64Url(payload.body?.data);
 }
 
 export async function syncGmail(tenantId: string): Promise<SyncResult> {
@@ -51,34 +95,53 @@ export async function syncGmail(tenantId: string): Promise<SyncResult> {
     `https://gmail.googleapis.com/gmail/v1/users/me/messages?${listQs}`,
   );
   const ids = (list.messages ?? []).slice(0, 15);
-  let imported = 0;
+
+  // 1) Fetch full messages (body included) so the AI summary has real content.
+  const emails: { gid: string; from: string; subject: string; snippet: string; body: string; received: Date }[] = [];
   for (const { id: gid } of ids) {
     const msg = await googleClient.get<GmailMessage>(
       tenantId,
-      `https://gmail.googleapis.com/gmail/v1/users/me/messages/${gid}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages/${gid}?format=full`,
     );
     const headers = msg.payload?.headers ?? [];
-    const from = headerValue(headers, 'From');
-    const subject = headerValue(headers, 'Subject') || '(no subject)';
     const snippet = msg.snippet ?? '';
-    const received = msg.internalDate ? new Date(Number(msg.internalDate)) : new Date();
+    const body = (extractPlainText(msg.payload) || snippet).replace(/\s+/g, ' ').trim().slice(0, MAX_MAIL_BODY);
+    emails.push({
+      gid,
+      from: displayName(headerValue(headers, 'From')),
+      subject: headerValue(headers, 'Subject') || '(no subject)',
+      snippet,
+      body,
+      received: msg.internalDate ? new Date(Number(msg.internalDate)) : new Date(),
+    });
+  }
+
+  // 2) Batch AI triage (summary/category/priority/tags); null entries fall back to the heuristic.
+  const triaged = await triageEmails(emails.map((e) => ({ from: e.from, subject: e.subject, body: e.body })));
+
+  // 3) Persist.
+  for (let i = 0; i < emails.length; i++) {
+    const e = emails[i]!;
+    const t = triaged[i] ?? null;
     await execute(
       `INSERT INTO mail_items (id, tenant_id, from_name, subject, summary, category, priority, received_at, tags)
-       VALUES (:id, :t, :from, :subj, :sum, :cat, 'med', :rcv, JSON_ARRAY())
-       ON DUPLICATE KEY UPDATE from_name=VALUES(from_name), subject=VALUES(subject), summary=VALUES(summary), category=VALUES(category), received_at=VALUES(received_at)`,
+       VALUES (:id, :t, :from, :subj, :sum, :cat, :pri, :rcv, :tags)
+       ON DUPLICATE KEY UPDATE from_name=VALUES(from_name), subject=VALUES(subject), summary=VALUES(summary),
+         category=VALUES(category), priority=VALUES(priority), received_at=VALUES(received_at), tags=VALUES(tags)`,
       {
-        id: `mailg_${gid}`.slice(0, 40),
+        id: `mailg_${e.gid}`.slice(0, 40),
         t: tenantId,
-        from: displayName(from).slice(0, 160),
-        subj: subject.slice(0, 255),
-        sum: snippet.slice(0, 1000),
-        cat: categorize(`${subject} ${snippet}`),
-        rcv: ymd(received),
+        from: e.from.slice(0, 160),
+        subj: e.subject.slice(0, 255),
+        sum: (t?.summary || e.snippet).slice(0, 1000),
+        cat: t?.category ?? categorize(`${e.subject} ${e.snippet}`),
+        pri: t?.priority ?? 'med',
+        rcv: ymd(e.received),
+        tags: JSON.stringify(t?.tags ?? []),
       },
     );
-    imported++;
   }
-  return { imported, detail: `${imported} messages` };
+  return { imported: emails.length, detail: `${emails.length} messages` };
 }
 
 /** Sends an email via Gmail (used for approved "Draft email" delivery). */

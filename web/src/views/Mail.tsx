@@ -4,7 +4,7 @@ import type { MailItem, TaskPriority } from '@iris/shared';
 import { Avatar, Spinner } from '@/components/primitives';
 import { Check, Plus, Search, Sparkle } from '@/components/icons';
 import { ApiError } from '@/lib/api';
-import { useMailItems, useMailStats } from '@/features/mail/useMail';
+import { useMailItems, useMailStats, useSyncMail } from '@/features/mail/useMail';
 import styles from './Mail.module.css';
 
 /**
@@ -45,6 +45,8 @@ export function Mail() {
 
   const stats = useMailStats();
   const items = useMailItems(category, keyword);
+  const syncMail = useSyncMail();
+  const syncErr = syncMail.error instanceof ApiError ? syncMail.error.message : null;
 
   const totalIndexed = stats.data?.indexed ?? 0;
   const categories = useMemo(() => stats.data?.categories ?? [], [stats.data]);
@@ -120,11 +122,18 @@ export function Mail() {
           </div>
         )}
 
-        <button className={styles.fetchBtn} disabled title="Live fetch arrives with the AI engine">
-          <Sparkle size={15} />
-          Fetch &amp; summarize
+        <button
+          className={styles.fetchBtn}
+          onClick={() => syncMail.mutate()}
+          disabled={syncMail.isPending}
+          title="Fetch recent Gmail and let IRIS summarize and triage it"
+        >
+          {syncMail.isPending ? <Spinner size={14} /> : <Sparkle size={15} />}
+          {syncMail.isPending ? 'Reading inbox…' : 'Fetch & summarize'}
         </button>
       </section>
+
+      {syncErr && <div className={styles.syncError}>{syncErr}</div>}
 
       {/* Stats strip */}
       <section className={styles.statsStrip}>

@@ -16,7 +16,16 @@ function buildQuery({ category, q }: MailQuery): string {
   return s ? `?${s}` : '';
 }
 
+export interface MailSyncResult {
+  provider: string;
+  ok: boolean;
+  imported: number;
+  detail: string;
+  error?: string;
+}
+
 export const mailApi = {
   items: (query: MailQuery = {}) => api.get<MailItem[]>(`/mail/items${buildQuery(query)}`),
   stats: () => api.get<MailStats>('/mail/stats'),
+  sync: () => api.post<MailSyncResult>('/mail/sync'),
 };

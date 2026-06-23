@@ -1,4 +1,4 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { mailApi, type MailQuery } from './api';
 
 const mailKey = {
@@ -27,5 +27,16 @@ export function useMailStats() {
     queryKey: mailKey.stats,
     queryFn: () => mailApi.stats(),
     staleTime: 60_000,
+  });
+}
+
+/** Fetches recent Gmail and AI-triages it, then refreshes the list + stats. */
+export function useSyncMail() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => mailApi.sync(),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['mail'] });
+    },
   });
 }
