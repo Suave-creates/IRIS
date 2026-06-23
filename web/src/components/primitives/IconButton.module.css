@@ -1,0 +1,30 @@
+.btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  cursor: pointer;
+  color: var(--text-2);
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.bordered {
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.bordered:hover {
+  background: var(--surface-2);
+}
+
+.plain {
+  border: none;
+  background: transparent;
+}
+.plain:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}

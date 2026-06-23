@@ -1,0 +1,101 @@
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+.menu {
+  position: absolute;
+  top: 44px;
+  right: 0;
+  width: 344px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-pop);
+  z-index: 45;
+  overflow: hidden;
+  animation: irisDrop 0.16s ease;
+}
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.title {
+  font-size: 14px;
+  font-weight: 750;
+}
+.badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--accent);
+  padding: 1px 7px;
+  border-radius: 99px;
+  margin-left: 4px;
+}
+.markRead {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+}
+.list {
+  max-height: 340px;
+  overflow-y: auto;
+}
+.item {
+  display: flex;
+  gap: 11px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+.item:hover {
+  background: var(--surface-2);
+}
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 5px;
+  flex: none;
+}
+.body {
+  flex: 1;
+  min-width: 0;
+}
+.row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.itemTitle {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text);
+}
+.time {
+  font-size: 11px;
+  color: var(--text-3);
+  flex: none;
+}
+.text {
+  font-size: 12px;
+  color: var(--text-2);
+  line-height: 1.45;
+  margin-top: 2px;
+}
+.viewAll {
+  padding: 11px 16px;
+  text-align: center;
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--accent);
+  cursor: pointer;
+}
+.viewAll:hover {
+  background: var(--surface-2);
+}

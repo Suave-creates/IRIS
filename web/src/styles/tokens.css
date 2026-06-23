@@ -1,0 +1,184 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   IRIS design tokens — transcribed verbatim from the approved prototype
+   (IRIS.dc.html). Light + dark themes, type, radii, shadows, keyframes.
+   ────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* Brand accent (running default from the prototype; tenant-overridable). */
+  --accent: #4b49d6;
+  --accent-rgb: 75, 73, 214;
+
+  /* Surfaces & text — light */
+  --bg: #f4f4f2;
+  --surface: #ffffff;
+  --surface-2: #faf9f8;
+  --surface-3: #f1f1ef;
+  --text: #18181b;
+  --text-2: #6b6b73;
+  --text-3: #9a9aa3;
+  --border: rgba(17, 17, 26, 0.07);
+  --border-2: rgba(17, 17, 26, 0.12);
+  --accent-soft: #ededfc;
+  --scroll: rgba(17, 17, 26, 0.18);
+  --welcome-bg: radial-gradient(120% 120% at 50% 0%, #f3f2ff 0%, #f4f4f2 55%);
+
+  /* Status palette (shared light/dark) */
+  --danger: #d14343;
+  --danger-soft: #fdecec;
+  --warn: #c77700;
+  --warn-soft: #fdf3e3;
+  --success: #1f9d57;
+  --success-soft: #e8f5ee;
+  --info: #2a6fdb;
+  --info-soft: #e7f0fd;
+  --violet: #6b2fb5;
+  --violet-soft: #f3eafc;
+
+  /* Type */
+  --font-sans: 'Hanken Grotesk', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+  --font-serif: 'Instrument Serif', Georgia, serif;
+
+  /* Layout */
+  --cardpad: 22px;
+  --nav-w: 248px;
+  --nav-w-collapsed: 76px;
+  --header-h: 58px;
+  --radius-sm: 7px;
+  --radius: 11px;
+  --radius-lg: 16px;
+  --radius-xl: 18px;
+
+  /* Elevation */
+  --shadow-1: 0 1px 2px rgba(17, 17, 26, 0.04);
+  --shadow-2: 0 2px 10px rgba(17, 17, 26, 0.05);
+  --shadow-3: 0 8px 24px rgba(17, 17, 26, 0.09);
+  --shadow-pop: 0 20px 50px rgba(0, 0, 0, 0.2);
+  --shadow-modal: 0 30px 80px rgba(0, 0, 0, 0.3);
+}
+
+:root[data-theme='dark'] {
+  --bg: #0f0f13;
+  --surface: #18181f;
+  --surface-2: #1d1d25;
+  --surface-3: #26262f;
+  --text: #f1f1f4;
+  --text-2: #a6a6b0;
+  --text-3: #74747e;
+  --border: rgba(255, 255, 255, 0.09);
+  --border-2: rgba(255, 255, 255, 0.16);
+  --accent-soft: rgba(124, 122, 235, 0.18);
+  --scroll: rgba(255, 255, 255, 0.18);
+  --welcome-bg: radial-gradient(130% 130% at 50% 0%, #3d424b 0%, #2b2f35 45%, #1f2227 100%);
+  --danger-soft: rgba(209, 67, 67, 0.16);
+  --warn-soft: rgba(199, 119, 0, 0.16);
+  --success-soft: rgba(31, 157, 87, 0.16);
+  --info-soft: rgba(42, 111, 219, 0.16);
+  --violet-soft: rgba(107, 47, 181, 0.18);
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-2: 0 2px 10px rgba(0, 0, 0, 0.35);
+  --shadow-3: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  transition:
+    background 0.25s ease,
+    color 0.25s ease;
+}
+
+::selection {
+  background: rgba(124, 122, 235, 0.28);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--scroll);
+  border-radius: 8px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+button {
+  font-family: inherit;
+}
+
+@keyframes irisSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes irisPulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes irisRise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes irisDrop {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes irisShimmer {
+  from {
+    background-position: -220px 0;
+  }
+  to {
+    background-position: 220px 0;
+  }
+}
+@keyframes irisBlink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

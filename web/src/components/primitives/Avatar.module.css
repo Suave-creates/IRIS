@@ -1,0 +1,16 @@
+.avatar {
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3a38b8, #6f6de6);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  flex: none;
+  user-select: none;
+}
+.img {
+  border-radius: 50%;
+  object-fit: cover;
+  flex: none;
+}

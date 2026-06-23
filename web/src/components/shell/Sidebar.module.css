@@ -1,0 +1,157 @@
+.aside {
+  position: relative;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  padding: 18px 14px;
+  border-right: 1px solid var(--border);
+  transition: width 0.22s ease;
+}
+
+.collapseBtn {
+  position: absolute;
+  top: 20px;
+  right: -13px;
+  z-index: 30;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+.collapseBtn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 8px 10px 18px;
+}
+.brandMark {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: var(--accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  box-shadow: 0 2px 8px rgba(var(--accent-rgb), 0.35);
+}
+.brandText {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.05;
+}
+.brandName {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.brandTag {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: var(--text-3);
+  text-transform: uppercase;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.divider {
+  height: 1px;
+  background: var(--border);
+  margin: 10px 8px;
+}
+.navBtn {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 8px 11px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 13.5px;
+  font-weight: 550;
+  cursor: pointer;
+  text-align: left;
+  letter-spacing: -0.01em;
+}
+.navBtn:hover {
+  background: var(--surface);
+  color: var(--text);
+}
+.navActive {
+  background: var(--surface);
+  color: var(--text);
+}
+.aside[data-collapsed='true'] .navBtn {
+  justify-content: center;
+  padding-left: 0;
+  padding-right: 0;
+  gap: 0;
+}
+
+.footer {
+  margin-top: auto;
+  position: relative;
+}
+.profile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px;
+  border-radius: 11px;
+  border: 1px solid var(--border);
+  background: transparent;
+  cursor: pointer;
+}
+.profile:hover {
+  background: var(--surface-2);
+}
+.aside[data-collapsed='true'] .profile {
+  justify-content: center;
+}
+.profileText {
+  min-width: 0;
+  line-height: 1.2;
+  flex: 1;
+  text-align: left;
+}
+.profileName {
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.profileRole {
+  font-size: 11px;
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.profileChev {
+  color: var(--text-3);
+  flex: none;
+}

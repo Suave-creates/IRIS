@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+.npm/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Environment & secrets — NEVER commit
+.env
+.env.*
+!.env.example
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Editor / OS
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Test / coverage
+coverage/
+.nyc_output/
+
+# Runtime
+*.pid
+*.seed
+.cache/
+
+# Local data / uploads (object-storage adapter fallback)
+storage/
+tmp/
+
+# Design handoff bundle (source of truth, kept out of app build)
+Executive dashboard design overview-handoff/
