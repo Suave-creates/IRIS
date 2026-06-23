@@ -4,6 +4,7 @@ import type { ConnectorProvider, ConnectorStatus, Priority, Role } from './const
 export type ProjectSourceType = 'manual' | 'calendar' | 'journal' | 'conversation' | 'sheet' | 'doc' | 'folder';
 
 export interface ProjectField {
+  id: string;
   label: string;
   value: string;
 }
@@ -46,11 +47,33 @@ export interface ProjectSource {
   name: string;
   meta: string | null;
   status: 'linked' | 'scanning' | 'scanned';
+  externalId: string | null;
+  webLink: string | null;
+}
+/** A real item available to link, listed live from a connector (Google Drive). */
+export interface AvailableSource {
+  externalId: string;
+  name: string;
+  type: 'folder' | 'sheet' | 'doc';
+  webLink: string | null;
 }
 export interface CreateProjectInput {
   name: string;
   priority: Priority;
   deadline?: string | null;
+  /** Optional context IRIS uses to write the AI card summary. */
+  description?: string | null;
+}
+/** Partial update for "edit everything" on a project card. */
+export interface UpdateProjectInput {
+  name?: string;
+  priority?: Priority;
+  deadline?: string | null;
+  status?: string;
+  owner?: string;
+  summary?: string;
+  progress?: number;
+  currentStage?: number;
 }
 
 // ── Journal ───────────────────────────────────────────────────────────────

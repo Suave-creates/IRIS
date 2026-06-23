@@ -22,7 +22,7 @@ async function getAccessToken(tenantId: string): Promise<string> {
   return tokens.accessToken;
 }
 
-async function request<T>(tenantId: string, url: string, init?: RequestInit): Promise<T> {
+async function rawRequest(tenantId: string, url: string, init?: RequestInit): Promise<Response> {
   const doFetch = (token: string) =>
     fetch(url, { ...init, headers: { Authorization: `Bearer ${token}`, ...(init?.headers ?? {}) } });
 
@@ -38,7 +38,11 @@ async function request<T>(tenantId: string, url: string, init?: RequestInit): Pr
       res = await doFetch(token);
     }
   }
+  return res;
+}
 
+async function request<T>(tenantId: string, url: string, init?: RequestInit): Promise<T> {
+  const res = await rawRequest(tenantId, url, init);
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     throw Errors.upstream(`Google API error (${res.status}): ${text.slice(0, 160)}`, 'Try reconnecting Google.');
@@ -49,6 +53,12 @@ async function request<T>(tenantId: string, url: string, init?: RequestInit): Pr
 export const googleClient = {
   isConnected: async (tenantId: string) => (await vault.get(tenantId, GOOGLE_GRANT)) !== null,
   get: <T>(tenantId: string, url: string) => request<T>(tenantId, url),
+  /** Fetches a URL and returns the raw response body as text (e.g. Drive export). */
+  getText: async (tenantId: string, url: string): Promise<string> => {
+    const res = await rawRequest(tenantId, url);
+    if (!res.ok) return '';
+    return res.text();
+  },
   post: <T>(tenantId: string, url: string, body: unknown, contentType = 'application/json') =>
     request<T>(tenantId, url, {
       method: 'POST',

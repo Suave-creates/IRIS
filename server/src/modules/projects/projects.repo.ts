@@ -70,6 +70,8 @@ interface SourceRow extends RowDataPacket {
   type: 'folder' | 'sheet' | 'doc';
   name: string;
   meta: string | null;
+  external_id: string | null;
+  web_link: string | null;
   status: 'linked' | 'scanning' | 'scanned';
   created_at: string;
 }
@@ -115,7 +117,7 @@ function relativeTime(createdAt: string): string {
 }
 
 function toField(r: FieldRow): ProjectField {
-  return { label: r.label, value: r.value };
+  return { id: r.id, label: r.label, value: r.value };
 }
 function toTask(r: TaskRow): ProjectTask {
   return { id: r.id, title: r.title, done: r.done === 1 };
@@ -127,7 +129,15 @@ function toActivity(r: ActivityRow): ProjectActivity {
   return { who: r.who, act: r.act, time: relativeTime(r.created_at) };
 }
 function toSource(r: SourceRow): ProjectSource {
-  return { id: r.id, type: r.type, name: r.name, meta: r.meta ?? null, status: r.status };
+  return {
+    id: r.id,
+    type: r.type,
+    name: r.name,
+    meta: r.meta ?? null,
+    status: r.status,
+    externalId: r.external_id ?? null,
+    webLink: r.web_link ?? null,
+  };
 }
 
 interface Children {
@@ -309,7 +319,7 @@ export const projectsRepo = {
   /** Creates a manual project + an initial "created this project" activity row. Returns the hydrated project. */
   async createManual(
     tenantId: string,
-    input: { name: string; priority: Priority; deadline?: string | null; owner: string },
+    input: { name: string; priority: Priority; deadline?: string | null; owner: string; summary?: string | null },
   ): Promise<Project> {
     const projectId = id('proj');
     await withTransaction(async (conn) => {
@@ -329,7 +339,7 @@ export const projectsRepo = {
           progress: 0,
           owner: input.owner,
           auto: 0,
-          summary: null,
+          summary: input.summary ?? null,
           detail: null,
           stages: JSON.stringify(DEFAULT_STAGES),
           stage: 0,
@@ -413,6 +423,193 @@ export const projectsRepo = {
     await execute('UPDATE project_sources SET status = :scanned WHERE tenant_id = :tid', {
       scanned: 'scanned',
       tid: tenantId,
+    });
+  },
+
+  /** Links a real connector item (e.g. a Drive file) as a project source. */
+  async createSourceLinked(
+    tenantId: string,
+    input: { type: 'folder' | 'sheet' | 'doc'; name: string; externalId: string; webLink?: string | null; meta?: string | null },
+  ): Promise<ProjectSource> {
+    const sourceId = id('psrc');
+    const metaByType = { folder: 'Google Drive folder', sheet: 'Google Sheets', doc: 'Google Docs' };
+    await execute(
+      `INSERT INTO project_sources (id, tenant_id, type, name, meta, external_id, web_link, status)
+       VALUES (:id, :tid, :type, :name, :meta, :ext, :link, 'linked')`,
+      {
+        id: sourceId, tid: tenantId, type: input.type, name: input.name.slice(0, 200),
+        meta: input.meta ?? metaByType[input.type], ext: input.externalId, link: input.webLink ?? null,
+      },
+    );
+    const created = await this.findSourceRow(tenantId, sourceId);
+    if (!created) throw new Error('Failed to link source');
+    return toSource(created);
+  },
+
+  async deleteSource(tenantId: string, sourceId: string): Promise<boolean> {
+    const r = await execute('DELETE FROM project_sources WHERE id = :sid AND tenant_id = :tid', {
+      sid: sourceId, tid: tenantId,
+    });
+    return r.affectedRows > 0;
+  },
+
+  /** Raw source rows for the tenant (used by the AI fetch). */
+  async listSourceRows(tenantId: string): Promise<SourceRow[]> {
+    return query<SourceRow[]>('SELECT * FROM project_sources WHERE tenant_id = :tid ORDER BY created_at, id', {
+      tid: tenantId,
+    });
+  },
+
+  async deleteProject(tenantId: string, projectId: string): Promise<boolean> {
+    const r = await execute('DELETE FROM projects WHERE id = :pid AND tenant_id = :tid', {
+      pid: projectId, tid: tenantId,
+    });
+    return r.affectedRows > 0;
+  },
+
+  /** Updates core project fields; only the keys present in `patch` change. */
+  async updateProject(
+    tenantId: string,
+    projectId: string,
+    patch: { name?: string; priority?: Priority; deadline?: string | null; status?: string; owner?: string; summary?: string; progress?: number; currentStage?: number },
+  ): Promise<boolean> {
+    const r = await execute(
+      `UPDATE projects SET
+         name = COALESCE(:name, name),
+         priority = COALESCE(:priority, priority),
+         deadline = IF(:deadlineSet, :deadline, deadline),
+         status = COALESCE(:status, status),
+         owner = COALESCE(:owner, owner),
+         summary = COALESCE(:summary, summary),
+         progress = COALESCE(:progress, progress),
+         current_stage = COALESCE(:currentStage, current_stage)
+       WHERE id = :pid AND tenant_id = :tid`,
+      {
+        pid: projectId, tid: tenantId,
+        name: patch.name ?? null,
+        priority: patch.priority ?? null,
+        deadlineSet: patch.deadline !== undefined ? 1 : 0,
+        deadline: patch.deadline ?? null,
+        status: patch.status ?? null,
+        owner: patch.owner ?? null,
+        summary: patch.summary ?? null,
+        progress: patch.progress ?? null,
+        currentStage: patch.currentStage ?? null,
+      },
+    );
+    return r.affectedRows > 0;
+  },
+
+  // ── Field CRUD (tenant verified via join to projects) ─────────────────────
+  async addField(tenantId: string, projectId: string, label: string, value: string): Promise<boolean> {
+    const owner = await this.findRow(tenantId, projectId);
+    if (!owner) return false;
+    await execute(
+      `INSERT INTO project_fields (id, project_id, label, value, position)
+       VALUES (:id, :pid, :label, :value, (SELECT COALESCE(MAX(position)+1,0) FROM project_fields pf WHERE pf.project_id = :pid))`,
+      { id: id('pfld'), pid: projectId, label: label.slice(0, 80), value: value.slice(0, 200) },
+    );
+    return true;
+  },
+  async updateField(tenantId: string, fieldId: string, label: string, value: string): Promise<boolean> {
+    const r = await execute(
+      `UPDATE project_fields pf JOIN projects p ON p.id = pf.project_id
+         SET pf.label = :label, pf.value = :value
+       WHERE pf.id = :fid AND p.tenant_id = :tid`,
+      { fid: fieldId, tid: tenantId, label: label.slice(0, 80), value: value.slice(0, 200) },
+    );
+    return r.affectedRows > 0;
+  },
+  async deleteField(tenantId: string, fieldId: string): Promise<boolean> {
+    const r = await execute(
+      `DELETE pf FROM project_fields pf JOIN projects p ON p.id = pf.project_id WHERE pf.id = :fid AND p.tenant_id = :tid`,
+      { fid: fieldId, tid: tenantId },
+    );
+    return r.affectedRows > 0;
+  },
+
+  // ── Task add/edit/delete (toggle lives in setTaskDone) ────────────────────
+  async addTask(tenantId: string, projectId: string, title: string): Promise<boolean> {
+    const owner = await this.findRow(tenantId, projectId);
+    if (!owner) return false;
+    await execute(
+      `INSERT INTO project_tasks (id, project_id, title, done, position)
+       VALUES (:id, :pid, :title, 0, (SELECT COALESCE(MAX(position)+1,0) FROM project_tasks pt WHERE pt.project_id = :pid))`,
+      { id: id('ptsk'), pid: projectId, title: title.slice(0, 255) },
+    );
+    return true;
+  },
+  async updateTask(tenantId: string, taskId: string, patch: { title?: string; done?: boolean }): Promise<boolean> {
+    const r = await execute(
+      `UPDATE project_tasks pt JOIN projects p ON p.id = pt.project_id
+         SET pt.title = COALESCE(:title, pt.title), pt.done = COALESCE(:done, pt.done)
+       WHERE pt.id = :tid AND p.tenant_id = :ten`,
+      { tid: taskId, ten: tenantId, title: patch.title ?? null, done: patch.done === undefined ? null : patch.done ? 1 : 0 },
+    );
+    return r.affectedRows > 0;
+  },
+  async deleteTask(tenantId: string, taskId: string): Promise<boolean> {
+    const r = await execute(
+      `DELETE pt FROM project_tasks pt JOIN projects p ON p.id = pt.project_id WHERE pt.id = :tid AND p.tenant_id = :ten`,
+      { tid: taskId, ten: tenantId },
+    );
+    return r.affectedRows > 0;
+  },
+
+  /** Creates (or refreshes) a project distilled by AI from a linked source. */
+  async createFromExtraction(
+    tenantId: string,
+    source: { type: ProjectSourceType; name: string; externalId: string },
+    ex: {
+      name: string; summary: string; priority: Priority; deadline: string | null; status: string;
+      fields: { label: string; value: string }[]; tasks: { title: string }[]; stages: string[]; currentStage: number;
+    },
+  ): Promise<void> {
+    const stages = ex.stages.length ? ex.stages : DEFAULT_STAGES;
+    const currentStage = Math.max(0, Math.min(ex.currentStage, stages.length - 1));
+    const progress = Math.round(((currentStage + 1) / stages.length) * 100);
+    await withTransaction(async (conn) => {
+      // Refresh: drop any prior project from this source (children cascade).
+      await conn.execute('DELETE FROM projects WHERE tenant_id = :tid AND source_ref = :ref', {
+        tid: tenantId, ref: source.externalId,
+      } as never);
+      const projectId = id('proj');
+      await conn.execute(
+        `INSERT INTO projects
+           (id, tenant_id, name, source, priority, status, deadline, progress, owner, auto, summary, source_detail, source_ref, stages, current_stage)
+         VALUES
+           (:id, :tid, :name, :source, :priority, :status, :deadline, :progress, 'IRIS', 1, :summary, :detail, :ref, :stages, :stage)`,
+        {
+          id: projectId, tid: tenantId, name: ex.name.slice(0, 200), source: source.type, priority: ex.priority,
+          status: ex.status.slice(0, 40), deadline: ex.deadline, progress, summary: ex.summary,
+          detail: `${source.type} · ${source.name}`, ref: source.externalId,
+          stages: JSON.stringify(stages), stage: currentStage,
+        } as never,
+      );
+      for (let i = 0; i < ex.fields.length; i++) {
+        const f = ex.fields[i]!;
+        await conn.execute(
+          `INSERT INTO project_fields (id, project_id, label, value, position) VALUES (:id, :pid, :label, :value, :pos)`,
+          { id: id('pfld'), pid: projectId, label: f.label, value: f.value, pos: i } as never,
+        );
+      }
+      for (let i = 0; i < ex.tasks.length; i++) {
+        await conn.execute(
+          `INSERT INTO project_tasks (id, project_id, title, done, position) VALUES (:id, :pid, :title, 0, :pos)`,
+          { id: id('ptsk'), pid: projectId, title: ex.tasks[i]!.title, pos: i } as never,
+        );
+      }
+      await conn.execute(
+        `INSERT INTO project_activity (id, project_id, who, act) VALUES (:id, :pid, 'IRIS', :act)`,
+        { id: id('pact'), pid: projectId, act: `extracted this project from ${source.name}` } as never,
+      );
+    });
+  },
+
+  /** Marks a single source's scan status. */
+  async setSourceStatus(tenantId: string, sourceId: string, status: 'linked' | 'scanning' | 'scanned'): Promise<void> {
+    await execute('UPDATE project_sources SET status = :s WHERE id = :sid AND tenant_id = :tid', {
+      s: status, sid: sourceId, tid: tenantId,
     });
   },
 

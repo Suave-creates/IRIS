@@ -1,3 +1,160 @@
+/* ── Edit mode (M4b) ── */
+.addrActions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-left: auto;
+}
+.editBtn,
+.editOn,
+.deleteBtn {
+  font-size: 12px;
+  font-weight: 650;
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-2);
+  background: var(--surface);
+  color: var(--text-2);
+  cursor: pointer;
+}
+.editOn {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.deleteBtn {
+  color: var(--danger);
+  border-color: rgba(209, 67, 67, 0.3);
+}
+.deleteBtn:hover {
+  background: var(--danger-soft);
+}
+.editForm {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.editRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.labeled {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.labeledText {
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--text-2);
+}
+.input,
+.textarea,
+.inputSm {
+  width: 100%;
+  border: 1px solid var(--border-2);
+  border-radius: 9px;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--surface);
+  outline: none;
+  padding: 9px 11px;
+}
+.inputSm {
+  font-size: 13px;
+  padding: 7px 9px;
+}
+.textarea {
+  resize: none;
+  line-height: 1.55;
+}
+.input:focus,
+.textarea:focus,
+.inputSm:focus {
+  border-color: var(--accent);
+}
+.saveBtn {
+  align-self: flex-start;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 9px 18px;
+  border-radius: 9px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 3px 10px rgba(var(--accent-rgb), 0.3);
+}
+.saveBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.fieldEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.fieldRow,
+.addFieldRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+.addBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 650;
+  padding: 7px 12px;
+  border-radius: 8px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.addBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.taskRowWrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.taskRowWrap .taskRow {
+  flex: 1;
+}
+.taskDelete {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.taskDelete:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.addTaskRow {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.addTaskRow .input {
+  flex: 1;
+}
+
 .overlay {
   position: fixed;
   inset: 0;

@@ -5,6 +5,105 @@
   margin: 0 auto;
 }
 
+/* ── M4b: real sources + Drive picker ── */
+.sourcesEmpty {
+  grid-column: 1 / -1;
+  font-size: 12.5px;
+  color: var(--text-3);
+  padding: 8px 2px;
+}
+.sourceDelete {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.sourceDelete:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.pickerHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.pickerTitle {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 750;
+}
+.pickerClose {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  border: none;
+  background: var(--bg);
+  color: var(--text-2);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pickerBody {
+  padding: 12px;
+  max-height: 60vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pickerCenter {
+  display: flex;
+  justify-content: center;
+  padding: 30px;
+}
+.pickerEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  font-size: 13.5px;
+  color: var(--text-2);
+}
+.pickerItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 13px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  cursor: pointer;
+  text-align: left;
+}
+.pickerItem:hover:not(:disabled) {
+  border-color: rgba(var(--accent-rgb), 0.4);
+  background: var(--surface-2);
+}
+.pickerItem:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.pickerItemName {
+  font-size: 13.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* ── Header ────────────────────────────────────────────────────────── */
 .header {
   display: flex;

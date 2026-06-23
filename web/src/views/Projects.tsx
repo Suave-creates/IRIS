@@ -1,14 +1,17 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { Project, ProjectSource } from '@iris/shared';
-import { Button, Spinner } from '@/components/primitives';
-import { Calendar, Database, Folder, Plus, Refresh, Sparkle } from '@/components/icons';
+import { Button, Modal, Spinner } from '@/components/primitives';
+import { ArrowUpRight, Calendar, Database, Folder, Plus, Refresh, Sparkle, X } from '@/components/icons';
+import { ApiError } from '@/lib/api';
 import {
-  useAddSource,
+  useAvailableSources,
+  useDeleteSource,
   useFetchProjects,
+  useLinkSource,
   useProjectSources,
   useProjects,
 } from '@/features/projects/useProjects';
-import type { AddSourceInput } from '@/features/projects/api';
 import { PRIORITY_META, SOURCE_META, deadlineLabel, statusColor } from './projects/helpers';
 import { AddProjectModal } from './projects/AddProjectModal';
 import { ProjectDetailModal } from './projects/ProjectDetailModal';
@@ -34,19 +37,14 @@ export function Projects() {
   const projects = useProjects();
   const sources = useProjectSources();
   const fetchProjects = useFetchProjects();
-  const addSource = useAddSource();
+  const deleteSource = useDeleteSource();
 
   const [addOpen, setAddOpen] = useState(false);
   const [openProject, setOpenProject] = useState<Project | null>(null);
+  const [pickerType, setPickerType] = useState<ProjectSource['type'] | null>(null);
 
-  const onAddSource = (type: AddSourceInput['type']) => {
-    const defaults: Record<AddSourceInput['type'], { name: string; meta: string }> = {
-      folder: { name: 'New folder', meta: 'Drive folder' },
-      sheet: { name: 'New sheet', meta: 'Spreadsheet' },
-      doc: { name: 'New doc', meta: 'Document' },
-    };
-    addSource.mutate({ type, ...defaults[type] });
-  };
+  const fetchErr =
+    fetchProjects.error instanceof ApiError ? fetchProjects.error.message : null;
 
   return (
     <div className={styles.page}>
@@ -82,14 +80,14 @@ export function Projects() {
             </div>
           </div>
           <div className={styles.sourceAddRow}>
-            <button className={styles.dashedBtn} onClick={() => onAddSource('folder')} disabled={addSource.isPending}>
+            <button className={styles.dashedBtn} onClick={() => setPickerType('folder')}>
               <Folder size={13} strokeWidth={2} />
               Folder
             </button>
-            <button className={styles.dashedBtn} onClick={() => onAddSource('sheet')} disabled={addSource.isPending}>
+            <button className={styles.dashedBtn} onClick={() => setPickerType('sheet')}>
               <span className={styles.glyph}>⊞</span> Sheet
             </button>
-            <button className={styles.dashedBtn} onClick={() => onAddSource('doc')} disabled={addSource.isPending}>
+            <button className={styles.dashedBtn} onClick={() => setPickerType('doc')}>
               <span className={styles.glyph}>¶</span> Doc
             </button>
           </div>
@@ -106,6 +104,11 @@ export function Projects() {
             </div>
           ) : (
             <>
+              {sources.data?.length === 0 && (
+                <div className={styles.sourcesEmpty}>
+                  No sources linked yet. Add a real Google Drive folder, doc, or sheet above.
+                </div>
+              )}
               {sources.data?.map((src) => {
                 const tone = SOURCE_TONE[src.type];
                 const st = SOURCE_STATUS[src.status];
@@ -121,32 +124,22 @@ export function Projects() {
                     <span className={styles.sourceStatus} style={{ color: st.color }}>
                       {st.label}
                     </span>
+                    <button
+                      className={styles.sourceDelete}
+                      onClick={() => deleteSource.mutate(src.id)}
+                      aria-label="Remove source"
+                    >
+                      <X size={12} strokeWidth={2.4} />
+                    </button>
                   </div>
                 );
               })}
-              <div className={styles.addSourceCard}>
-                <div className={styles.addSourceIcon}>
-                  <Plus size={16} strokeWidth={2.2} />
-                </div>
-                <div className={styles.sourceMeta}>
-                  <div className={styles.addSourceName}>Add source</div>
-                  <div className={styles.addSourceBtns}>
-                    <button className={styles.miniBtn} onClick={() => onAddSource('folder')} disabled={addSource.isPending}>
-                      Folder
-                    </button>
-                    <button className={styles.miniBtn} onClick={() => onAddSource('sheet')} disabled={addSource.isPending}>
-                      Sheet
-                    </button>
-                    <button className={styles.miniBtn} onClick={() => onAddSource('doc')} disabled={addSource.isPending}>
-                      Doc
-                    </button>
-                  </div>
-                </div>
-              </div>
             </>
           )}
         </div>
       </section>
+
+      {fetchErr && <div className={styles.inlineError}>{fetchErr}</div>}
 
       {/* Fetching banner */}
       {fetchProjects.isPending && (
@@ -184,7 +177,66 @@ export function Projects() {
 
       <AddProjectModal open={addOpen} onClose={() => setAddOpen(false)} />
       <ProjectDetailModal project={openProject} onClose={() => setOpenProject(null)} />
+      <SourcePicker type={pickerType} onClose={() => setPickerType(null)} />
     </div>
+  );
+}
+
+const TYPE_LABEL: Record<ProjectSource['type'], string> = { folder: 'folder', sheet: 'sheet', doc: 'doc' };
+
+/** Lists real Drive items of a type and links the chosen one as a project source. */
+function SourcePicker({ type, onClose }: { type: ProjectSource['type'] | null; onClose: () => void }) {
+  const navigate = useNavigate();
+  const available = useAvailableSources(type);
+  const link = useLinkSource();
+  const notConnected = available.error instanceof ApiError && available.error.code === 'UPSTREAM_UNAVAILABLE';
+
+  return (
+    <Modal open={type !== null} onClose={onClose} width={460} ariaLabel="Link a source">
+      <div className={styles.pickerHead}>
+        <h2 className={styles.pickerTitle}>Link a Google {type ? TYPE_LABEL[type] : 'source'}</h2>
+        <button className={styles.pickerClose} onClick={onClose} aria-label="Close">
+          <X size={14} strokeWidth={2.4} />
+        </button>
+      </div>
+      <div className={styles.pickerBody}>
+        {available.isLoading && (
+          <div className={styles.pickerCenter}>
+            <Spinner size={20} />
+          </div>
+        )}
+        {available.isError &&
+          (notConnected ? (
+            <div className={styles.pickerEmpty}>
+              <p>Connect Google to browse your real Drive items.</p>
+              <Button onClick={() => navigate('/connectors')}>Go to Connectors</Button>
+            </div>
+          ) : (
+            <div className={styles.inlineError}>
+              {available.error instanceof ApiError ? available.error.message : 'Could not list items.'}
+            </div>
+          ))}
+        {available.data && available.data.length === 0 && (
+          <div className={styles.pickerEmpty}>No {type ? TYPE_LABEL[type] : 'item'}s found in your Drive.</div>
+        )}
+        {available.data?.map((item) => (
+          <button
+            key={item.externalId}
+            className={styles.pickerItem}
+            disabled={link.isPending}
+            onClick={() =>
+              link.mutate(
+                { type: item.type, externalId: item.externalId, name: item.name, webLink: item.webLink },
+                { onSuccess: onClose },
+              )
+            }
+          >
+            <span className={styles.pickerItemName}>{item.name}</span>
+            <ArrowUpRight size={14} style={{ color: 'var(--text-3)' }} />
+          </button>
+        ))}
+      </div>
+    </Modal>
   );
 }
 
