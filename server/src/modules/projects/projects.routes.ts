@@ -7,7 +7,7 @@ import { googleClient } from '../../connectors/google/client.js';
 import {
   listDriveSources,
   parseDriveRef,
-  readSheetValues,
+  readSheetTabs,
   readSourceContent,
   resolveDriveItem,
 } from '../../connectors/google/drive.js';
@@ -126,7 +126,7 @@ export async function projectsRoutes(app: FastifyInstance): Promise<void> {
       try {
         const extracted =
           s.type === 'sheet'
-            ? await extractProjectsFromSheet(s.name, await readSheetValues(me.tenantId, s.external_id!))
+            ? await extractProjectsFromSheet(s.name, await readSheetTabs(me.tenantId, s.external_id!))
             : await extractProjects(s.type, s.name, await readSourceContent(me.tenantId, s.type, s.external_id!));
         await projectsRepo.createFromExtractions(
           me.tenantId,

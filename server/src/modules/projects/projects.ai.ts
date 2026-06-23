@@ -63,8 +63,8 @@ const EXTRACT_TOOL: Anthropic.Tool = {
 const MAX_PROJECTS_PER_SOURCE = 150;
 /** Rows per AI call when extracting from a tracker sheet (keeps each call well clear of truncation). */
 const SHEET_ROW_CHUNK = 14;
-/** Hard ceiling on data rows considered from one sheet. */
-const MAX_SHEET_DATA_ROWS = 250;
+/** Hard ceiling on data rows considered from one sheet, summed across all tabs. */
+const MAX_SHEET_DATA_ROWS = 400;
 /** Concurrent chunk extractions (balances latency against upstream rate limits). */
 const CHUNK_CONCURRENCY = 4;
 
@@ -199,12 +199,23 @@ async function runPooled<T, R>(items: T[], limit: number, fn: (item: T) => Promi
   return out;
 }
 
+export interface SheetTabInput {
+  title: string;
+  values: string[][];
+}
+
+interface SheetChunk {
+  tab: string;
+  headerLine: string;
+  records: string;
+}
+
 /**
- * Extracts one project card PER ROW from a tracker sheet. The grid is split into
- * labeled per-row records and processed in parallel chunks, so a 70-row sheet
- * reliably yields ~70 cards instead of one collapsed blob.
+ * Extracts one project card PER ROW from a tracker sheet, across EVERY tab.
+ * Each tab gets its own header detection; rows are split into labeled records and
+ * processed in parallel chunks, so a multi-tab, 70-row workbook yields ~70 cards.
  */
-export async function extractProjectsFromSheet(sourceName: string, values: string[][]): Promise<ExtractedProject[]> {
+export async function extractProjectsFromSheet(sourceName: string, tabs: SheetTabInput[]): Promise<ExtractedProject[]> {
   const fallback: ExtractedProject = {
     name: sourceName,
     summary: `Project from ${sourceName}.`,
@@ -217,47 +228,52 @@ export async function extractProjectsFromSheet(sourceName: string, values: strin
     currentStage: 1,
   };
 
-  const nonEmpty = values.filter((r) => r.some((c) => c.trim()));
-  if (!hasAnthropic || nonEmpty.length === 0) return [fallback];
+  const nonEmptyTabs = tabs.filter((t) => t.values.some((r) => r.some((c) => c.trim())));
+  if (!hasAnthropic || nonEmptyTabs.length === 0) return [fallback];
 
-  const { headerIdx, header } = pickHeader(values);
-  const dataRows = values
-    .slice(headerIdx + 1)
-    .filter((r) => r.some((c) => c.trim()))
-    .slice(0, MAX_SHEET_DATA_ROWS);
-
-  // No tabular data rows — fall back to whole-sheet text extraction.
-  if (dataRows.length === 0) {
-    return extractProjects('sheet', sourceName, nonEmpty.map((r) => r.join(' | ')).join('\n'));
+  // Build labeled-record chunks across all tabs, each tagged with its tab + header.
+  const chunks: SheetChunk[] = [];
+  let usedRows = 0;
+  for (const tab of nonEmptyTabs) {
+    if (usedRows >= MAX_SHEET_DATA_ROWS) break;
+    const { headerIdx, header } = pickHeader(tab.values);
+    const dataRows = tab.values.slice(headerIdx + 1).filter((r) => r.some((c) => c.trim()));
+    if (dataRows.length === 0) continue;
+    const headerLine = header.map((h, i) => h.trim() || `Column ${i + 1}`).join(' | ');
+    for (let i = 0; i < dataRows.length && usedRows < MAX_SHEET_DATA_ROWS; i += SHEET_ROW_CHUNK) {
+      const slice = dataRows.slice(i, i + SHEET_ROW_CHUNK);
+      usedRows += slice.length;
+      const recs: string[] = [];
+      slice.forEach((row, j) => {
+        const rec = formatRecord(j + 1, header, row);
+        if (rec) recs.push(rec);
+      });
+      if (recs.length) chunks.push({ tab: tab.title, headerLine, records: recs.join('\n') });
+    }
   }
 
-  const headerLine = header.map((h, i) => h.trim() || `Column ${i + 1}`).join(' | ');
-
-  // Build labeled-record chunks.
-  const chunks: string[] = [];
-  for (let i = 0; i < dataRows.length; i += SHEET_ROW_CHUNK) {
-    const recs: string[] = [];
-    dataRows.slice(i, i + SHEET_ROW_CHUNK).forEach((row, j) => {
-      const rec = formatRecord(j + 1, header, row);
-      if (rec) recs.push(rec);
-    });
-    if (recs.length) chunks.push(recs.join('\n'));
+  // No tabular data rows anywhere — fall back to whole-workbook text extraction.
+  if (chunks.length === 0) {
+    const text = nonEmptyTabs
+      .map((t) => `## Tab: ${t.title}\n${t.values.map((r) => r.join(' | ')).join('\n')}`)
+      .join('\n\n');
+    return extractProjects('sheet', sourceName, text);
   }
 
-  const perChunk = await runPooled(chunks, CHUNK_CONCURRENCY, async (records) => {
+  const perChunk = await runPooled(chunks, CHUNK_CONCURRENCY, async (chunk) => {
     try {
       const result = await extractWithTool<{ projects?: unknown[] }>({
         system: systemBlocks(
-          `You are IRIS, an executive chief-of-staff, building project cards from a tracker sheet named "${sourceName}". ` +
-            `The sheet columns are: ${headerLine}. ` +
-            `Below are numbered records — EACH record is one row of the sheet and represents ONE project. ` +
+          `You are IRIS, an executive chief-of-staff, building project cards from a tracker sheet named "${sourceName}" ` +
+            `(tab "${chunk.tab}"). The columns of this tab are: ${chunk.headerLine}. ` +
+            `Below are numbered records — EACH record is one row of the tab and represents ONE project. ` +
             `Call record_projects exactly once and emit ONE project per record that is a real project. ` +
             `SKIP a record only if it is empty, a repeated header, or a section/subtotal/total row — otherwise always include it. ` +
             `Use the project-name column for the name; write a tight 1–2 sentence executive summary from the row; ` +
             `infer a sensible priority and status from the status/importance columns; put the 3–5 most useful columns as fields; ` +
             `set a deadline from any ETA/timeline column (YYYY-MM-DD, else empty); and add concrete next tasks the row implies.`,
         ),
-        messages: [{ role: 'user', content: records }],
+        messages: [{ role: 'user', content: chunk.records }],
         tool: EXTRACT_TOOL,
         maxTokens: 8000,
       });
@@ -266,7 +282,7 @@ export async function extractProjectsFromSheet(sourceName: string, values: strin
         .filter((p): p is Record<string, unknown> => !!p && typeof p === 'object')
         .map((p) => normalizeProject(p, sourceName, ''));
     } catch (err) {
-      logger.warn({ err, sourceName }, 'sheet chunk extraction failed — skipping chunk');
+      logger.warn({ err, sourceName, tab: chunk.tab }, 'sheet chunk extraction failed — skipping chunk');
       return [] as ExtractedProject[];
     }
   });

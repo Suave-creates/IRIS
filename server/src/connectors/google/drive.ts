@@ -134,17 +134,109 @@ export async function resolveDriveItem(
   return fallback;
 }
 
+/** One tab (worksheet) of a spreadsheet: its title + raw cell grid. */
+export interface SheetTab {
+  title: string;
+  values: string[][];
+}
+
+/** Max worksheets read from one spreadsheet (bounds cost on huge workbooks). */
+const MAX_TABS = 20;
+
+/** A1-notation range for a tab, single-quoting + escaping the title (handles spaces/quotes). */
+function tabRange(title: string): string {
+  return `'${title.replace(/'/g, "''")}'!A1:AZ500`;
+}
+
 /**
- * Reads a sheet's raw cell grid (row-major) for structured, per-row extraction.
- * Returns a 2-D array of trimmed strings; trailing empty cells/rows are omitted by the API.
+ * Reads EVERY worksheet tab of a spreadsheet, not just the first.
+ * Enumerates tab titles, then batch-gets all their grids in one request.
  */
-export async function readSheetValues(tenantId: string, externalId: string): Promise<string[][]> {
+export async function readSheetTabs(tenantId: string, externalId: string): Promise<SheetTab[]> {
   const idEnc = encodeURIComponent(externalId);
+
+  // 1) Enumerate the grid tabs.
+  const metaQs = new URLSearchParams({ fields: 'sheets.properties(title,sheetType)' }).toString();
+  const meta = await googleClient.get<{ sheets?: { properties?: { title?: string; sheetType?: string } }[] }>(
+    tenantId,
+    `https://sheets.googleapis.com/v4/spreadsheets/${idEnc}?${metaQs}`,
+  );
+  const titles = (meta.sheets ?? [])
+    .map((s) => s.properties)
+    .filter((p) => !p?.sheetType || p.sheetType === 'GRID')
+    .map((p) => p?.title?.trim())
+    .filter((t): t is string => !!t)
+    .slice(0, MAX_TABS);
+  if (titles.length === 0) return [];
+
+  // 2) Batch-get the values of every tab (valueRanges come back in request order).
+  const params = new URLSearchParams({ majorDimension: 'ROWS', valueRenderOption: 'FORMATTED_VALUE' });
+  for (const t of titles) params.append('ranges', tabRange(t));
+  const data = await googleClient.get<{ valueRanges?: { values?: unknown[][] }[] }>(
+    tenantId,
+    `https://sheets.googleapis.com/v4/spreadsheets/${idEnc}/values:batchGet?${params.toString()}`,
+  );
+  const ranges = data.valueRanges ?? [];
+  return titles.map((title, i) => ({
+    title,
+    values: (ranges[i]?.values ?? []).map((row) => row.map((c) => (c == null ? '' : String(c)))),
+  }));
+}
+
+/** Flattens all tabs of a sheet into a single labeled text block (for AI text context). */
+export async function readSheetText(tenantId: string, externalId: string, maxChars = MAX_CONTENT): Promise<string> {
+  const tabs = await readSheetTabs(tenantId, externalId);
+  const text = tabs
+    .map((t) => `## Tab: ${t.title}\n${t.values.map((r) => r.join(' | ')).join('\n')}`)
+    .join('\n\n');
+  return text.slice(0, maxChars);
+}
+
+/** Extracts the worksheet gid from a Google Sheets URL (e.g. ...#gid=1937180792). */
+export function parseDriveGid(ref: string): string | null {
+  return ref.match(/[#?&]gid=([0-9]+)/)?.[1] ?? null;
+}
+
+/** Reads ONE worksheet (selected by gid) in full — the whole used range, all columns. */
+export async function readSheetTabByGid(tenantId: string, externalId: string, gid: string): Promise<SheetTab | null> {
+  const idEnc = encodeURIComponent(externalId);
+  const metaQs = new URLSearchParams({ fields: 'sheets.properties(title,sheetId,sheetType)' }).toString();
+  const meta = await googleClient.get<{
+    sheets?: { properties?: { title?: string; sheetId?: number; sheetType?: string } }[];
+  }>(tenantId, `https://sheets.googleapis.com/v4/spreadsheets/${idEnc}?${metaQs}`);
+  const want = Number(gid);
+  const match = (meta.sheets ?? [])
+    .map((s) => s.properties)
+    .find((p) => p?.sheetId === want && (!p?.sheetType || p.sheetType === 'GRID'));
+  const title = match?.title?.trim();
+  if (!title) return null;
+  // A bare quoted sheet name returns the whole used range of that tab (all columns).
+  const range = encodeURIComponent(`'${title.replace(/'/g, "''")}'`);
   const data = await googleClient.get<{ values?: unknown[][] }>(
     tenantId,
-    `https://sheets.googleapis.com/v4/spreadsheets/${idEnc}/values/A1:AZ500`,
+    `https://sheets.googleapis.com/v4/spreadsheets/${idEnc}/values/${range}`,
   );
-  return (data.values ?? []).map((row) => row.map((c) => (c == null ? '' : String(c))));
+  return { title, values: (data.values ?? []).map((row) => row.map((c) => (c == null ? '' : String(c)))) };
+}
+
+/**
+ * Text for AI context: if a gid is given, the single targeted tab in full;
+ * otherwise every tab (bounded). Honors a pasted "#gid=" so a huge workbook
+ * resolves to exactly the tab the user pointed at.
+ */
+export async function readSheetTextForRef(
+  tenantId: string,
+  externalId: string,
+  gid: string | null,
+  maxChars = 50_000,
+): Promise<string> {
+  if (gid) {
+    const tab = await readSheetTabByGid(tenantId, externalId, gid);
+    if (tab) {
+      return `## Tab: ${tab.title}\n${tab.values.map((r) => r.join(' | ')).join('\n')}`.slice(0, maxChars);
+    }
+  }
+  return readSheetText(tenantId, externalId, maxChars);
 }
 
 /** Reads the text content of a linked source (doc export / sheet values / folder listing). */
@@ -161,12 +253,7 @@ export async function readSourceContent(tenantId: string, type: SourceType, exte
   }
 
   if (type === 'sheet') {
-    const data = await googleClient.get<{ values?: string[][] }>(
-      tenantId,
-      `https://sheets.googleapis.com/v4/spreadsheets/${idEnc}/values/A1:Z200`,
-    );
-    const rows = (data.values ?? []).map((r) => r.join(' | '));
-    return rows.join('\n').slice(0, MAX_CONTENT);
+    return readSheetText(tenantId, externalId);
   }
 
   // folder → list children, read a couple of docs/sheets, concatenate.
