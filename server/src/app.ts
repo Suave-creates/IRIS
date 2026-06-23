@@ -7,7 +7,10 @@ import { env, isProd } from './config/env.js';
 import { Errors } from './lib/errors.js';
 import { loggerOptions } from './lib/logger.js';
 import { requestId } from './lib/ids.js';
+import { authRoutes } from './modules/auth/auth.routes.js';
+import { registerAuthContext } from './modules/auth/guards.js';
 import { healthRoutes } from './modules/health/health.routes.js';
+import { meRoutes } from './modules/users/me.routes.js';
 import { registerErrorHandling } from './plugins/errorHandler.js';
 
 /** Builds the fully-configured Fastify application (without listening). */
@@ -49,11 +52,16 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   registerErrorHandling(app);
 
+  // Resolve the session cookie → request.authUser on every request.
+  await registerAuthContext(app);
+
   // Routes — health is exposed both bare (infra) and under /api (client).
   await app.register(healthRoutes, { prefix: '/health' });
   await app.register(
     async (api) => {
       await api.register(healthRoutes, { prefix: '/health' });
+      await api.register(authRoutes, { prefix: '/auth' });
+      await api.register(meRoutes, { prefix: '/me' });
     },
     { prefix: '/api' },
   );

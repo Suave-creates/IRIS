@@ -1,0 +1,157 @@
+.page {
+  padding: 30px 36px 56px;
+  max-width: 920px;
+  width: 100%;
+  margin: 0 auto;
+}
+.title {
+  margin: 0 0 24px;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+.profile {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.profileBody {
+  flex: 1;
+}
+.profileName {
+  font-size: 17px;
+  font-weight: 700;
+}
+.profileMeta {
+  font-size: 13px;
+  color: var(--text-2);
+}
+.role {
+  text-transform: capitalize;
+  color: var(--accent);
+  font-weight: 600;
+}
+.tenant {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-2);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  padding: 6px 12px;
+  border-radius: 8px;
+}
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+@media (max-width: 760px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+.cardTitle {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 700;
+}
+.cardSub {
+  margin: 0 0 16px;
+  font-size: 12.5px;
+  color: var(--text-3);
+}
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--border);
+}
+.rowLast {
+  border-bottom: none;
+}
+.rowTitle {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.rowSub {
+  font-size: 12px;
+  color: var(--text-3);
+}
+.select {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+  background: var(--bg);
+  border: 1px solid var(--border-2);
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  outline: none;
+}
+.segmented {
+  display: flex;
+  gap: 4px;
+  background: var(--bg);
+  padding: 3px;
+  border-radius: 9px;
+}
+.seg,
+.segOn {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 13px;
+  border-radius: 7px;
+  border: none;
+  cursor: pointer;
+  background: transparent;
+  color: var(--text-3);
+}
+.segOn {
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+.count {
+  font-size: 14px;
+  font-weight: 700;
+}
+.sessionList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 0;
+}
+.sessionItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+.sessionMeta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.sessionUa {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.sessionIp {
+  font-size: 11px;
+  color: var(--text-3);
+  font-family: var(--font-mono);
+}
+.thisBadge {
+  font-size: 10.5px;
+  font-weight: 650;
+  color: var(--success);
+  background: var(--success-soft);
+  padding: 3px 9px;
+  border-radius: 99px;
+}

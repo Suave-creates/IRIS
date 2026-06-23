@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
-import { VIEW_PATHS } from '@iris/shared';
-import { DEMO_USER } from '@/app/demoUser';
+import { useSession, useLogout } from '@/features/auth/useSession';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { CommandPalette } from './CommandPalette';
@@ -12,6 +11,8 @@ const COLLAPSE_KEY = 'iris.sidebar.collapsed';
 /** Top-level application chrome: sidebar + header wrapping the routed view. */
 export function AppShell() {
   const navigate = useNavigate();
+  const { user } = useSession();
+  const logout = useLogout();
   const [collapsed, setCollapsed] = useState(() => {
     try {
       return localStorage.getItem(COLLAPSE_KEY) === '1';
@@ -44,15 +45,19 @@ export function AppShell() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  // M0: sign-out returns to the welcome screen. M1 wires real session teardown.
-  const onSignOut = useCallback(() => navigate(VIEW_PATHS.onboarding), [navigate]);
+  const onSignOut = useCallback(() => {
+    logout.mutate(undefined, { onSettled: () => navigate('/login', { replace: true }) });
+  }, [logout, navigate]);
+
+  // AuthGuard guarantees a user before AppShell renders.
+  if (!user) return null;
 
   return (
     <div className={styles.app}>
       <Sidebar
         collapsed={collapsed}
         onToggleCollapse={toggleCollapse}
-        user={DEMO_USER}
+        user={user}
         onSignOut={onSignOut}
       />
       <main className={styles.main}>

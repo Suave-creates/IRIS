@@ -12,11 +12,16 @@ function loadDotenv(): void {
   for (const path of candidates) {
     if (existsSync(path)) {
       dotenv.config({ path });
-      return;
+      break;
     }
   }
   // No file found — rely on real environment variables (e.g. in containers).
-  dotenv.config();
+  if (!candidates.some((p) => existsSync(p))) dotenv.config();
+
+  // Accept GMAIL_* as aliases for GOOGLE_* (one OAuth client powers SSO and the
+  // Google connectors). This matches how the credentials were provided.
+  process.env.GOOGLE_CLIENT_ID ||= process.env.GMAIL_CLIENT_ID;
+  process.env.GOOGLE_CLIENT_SECRET ||= process.env.GMAIL_CLIENT_SECRET;
 }
 
 loadDotenv();
@@ -25,11 +30,16 @@ const csv = z
   .string()
   .transform((s) => s.split(',').map((v) => v.trim()).filter(Boolean));
 
+const boolish = z
+  .union([z.boolean(), z.string()])
+  .transform((v) => (typeof v === 'boolean' ? v : ['1', 'true', 'yes', 'on'].includes(v.toLowerCase())));
+
 const EnvSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     PORT: z.coerce.number().int().positive().default(8080),
     APP_BASE_URL: z.string().url().default('http://localhost:8080'),
+    WEB_BASE_URL: z.string().url().default('http://localhost:5173'),
     CORS_ORIGINS: csv.default('http://localhost:5173,http://localhost:8080'),
     LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
 
@@ -46,19 +56,31 @@ const EnvSchema = z
     SESSION_SECRET: z.string().default('dev-insecure-session-secret-change-me'),
     TOKEN_ENCRYPTION_KEY: z.string().default(''),
 
+    // Auth
+    COOKIE_NAME: z.string().default('iris_session'),
+    OAUTH_COOKIE_NAME: z.string().default('iris_oauth'),
+    SESSION_TTL_DAYS: z.coerce.number().int().positive().default(30),
+    AUTH_PASSWORD_ENABLED: boolish.default('false'),
+    /** Restrict SSO sign-in to these email domains. Empty = allow any domain. */
+    AUTH_ALLOWED_DOMAINS: csv.default(''),
+
     GOOGLE_CLIENT_ID: z.string().default(''),
     GOOGLE_CLIENT_SECRET: z.string().default(''),
-    GOOGLE_OAUTH_REDIRECT_URI: z
-      .string()
-      .default('http://localhost:8080/api/auth/google/callback'),
+    GOOGLE_OAUTH_REDIRECT_URI: z.string().default('http://localhost:8080/api/auth/google/callback'),
+
+    // Seed (local/dev convenience)
+    SEED_OWNER_EMAIL: z.string().default('owner@demo.local'),
+    SEED_OWNER_NAME: z.string().default('Demo Owner'),
+    SEED_OWNER_PASSWORD: z.string().default('iris-demo-password'),
+    SEED_TENANT_NAME: z.string().default('Demo Workspace'),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production') {
-      if (env.SESSION_SECRET === 'dev-insecure-session-secret-change-me') {
+      if (env.SESSION_SECRET === 'dev-insecure-session-secret-change-me' || env.SESSION_SECRET.length < 16) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['SESSION_SECRET'],
-          message: 'SESSION_SECRET must be set to a strong random value in production.',
+          message: 'SESSION_SECRET must be a strong random value (≥16 chars) in production.',
         });
       }
       if (env.TOKEN_ENCRYPTION_KEY.length !== 64) {
@@ -79,7 +101,6 @@ function parseEnv(): Env {
     const issues = result.error.issues
       .map((i) => `  - ${i.path.join('.')}: ${i.message}`)
       .join('\n');
-    // Fail fast with a readable message — never boot with invalid config.
     throw new Error(`Invalid environment configuration:\n${issues}`);
   }
   return result.data;

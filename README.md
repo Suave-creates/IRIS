@@ -55,6 +55,7 @@ npm run dev
 | `npm run lint` | ESLint across the monorepo |
 | `npm run db:migrate` | Apply pending SQL migrations |
 | `npm run db:status` | Show applied / pending migrations |
+| `npm run db:seed` | Seed a demo tenant + owner (local/password testing) |
 
 ## Configuration
 
@@ -71,7 +72,7 @@ See [`.env.example`](./.env.example) for the full list. Notable keys:
 | | Milestone | Status |
 | --- | --- | --- |
 | M0 | Foundations + design-system port | ✅ |
-| M1 | Google SSO auth + tenancy + RBAC | ◻ |
+| M1 | Google SSO auth + tenancy + RBAC | ✅ |
 | M2 | Data model + live views | ◻ |
 | M3 | Context Engine + Claude core | ◻ |
 | M4 | Connector framework + workers | ◻ |

@@ -23,6 +23,11 @@ async function main(): Promise<void> {
 
   await app.listen({ port: env.PORT, host: '0.0.0.0' });
 
+  // Security-relevant: with SSO enabled and no domain allow-list, any verified
+  // Google account self-provisions a tenant. Warn in every environment.
+  if (hasGoogleOAuth && env.AUTH_ALLOWED_DOMAINS.length === 0) {
+    logger.warn('AUTH_ALLOWED_DOMAINS is empty — any verified Google account can sign in and create a tenant. Set it to restrict SSO to your domain(s).');
+  }
   if (!isProd) {
     if (!hasAnthropic) logger.warn('ANTHROPIC_API_KEY not set — AI features will be unavailable until configured.');
     if (!hasGoogleOAuth) logger.warn('Google OAuth not configured — SSO sign-in and Google connectors are disabled until GOOGLE_CLIENT_ID/SECRET are set.');
