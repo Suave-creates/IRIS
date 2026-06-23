@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { CalendarEvent, CalendarEventInput } from '@iris/shared';
 import { Button, Modal, Spinner } from '@/components/primitives';
 import { Plus, X } from '@/components/icons';
@@ -7,6 +7,7 @@ import {
   useCalendarEvents,
   useCreateEvent,
   useDeleteEvent,
+  useGuestSearch,
   useUpdateEvent,
 } from '@/features/calendar/useCalendar';
 import styles from './Calendar.module.css';
@@ -345,20 +346,33 @@ function EventModal({
   deleting: boolean;
 }) {
   const [guestInput, setGuestInput] = useState('');
+  const [debouncedQ, setDebouncedQ] = useState('');
+  const [focused, setFocused] = useState(false);
+  const [guestNames, setGuestNames] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQ(guestInput.trim()), 220);
+    return () => clearTimeout(t);
+  }, [guestInput]);
+  const suggest = useGuestSearch(debouncedQ);
+
   if (!form) return null;
   const editing = form.id !== null;
   const isEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
 
-  const addGuest = () => {
-    const g = guestInput.trim().toLowerCase();
-    if (!isEmail(g) || form.guests.includes(g)) {
-      setGuestInput('');
-      return;
-    }
+  const addEmail = (email: string, name?: string) => {
+    const g = email.trim().toLowerCase();
+    if (!isEmail(g) || form.guests.includes(g)) return;
+    if (name) setGuestNames((m) => ({ ...m, [g]: name }));
     onChange({ ...form, guests: [...form.guests, g] });
+  };
+  const addGuest = () => {
+    addEmail(guestInput);
     setGuestInput('');
   };
   const removeGuest = (g: string) => onChange({ ...form, guests: form.guests.filter((x) => x !== g) });
+
+  const picks = (suggest.data ?? []).filter((p) => !form.guests.includes(p.email.toLowerCase())).slice(0, 6);
+  const showPicks = focused && debouncedQ.length >= 2 && picks.length > 0;
 
   return (
     <Modal open onClose={onClose} width={460} ariaLabel="Event details">
@@ -428,8 +442,8 @@ function EventModal({
           {form.guests.length > 0 && (
             <div className={styles.guestChips}>
               {form.guests.map((g) => (
-                <span key={g} className={styles.guestChip}>
-                  {g}
+                <span key={g} className={styles.guestChip} title={guestNames[g] ? g : undefined}>
+                  {guestNames[g] ?? g}
                   <button type="button" onClick={() => removeGuest(g)} aria-label={`Remove ${g}`}>
                     <X size={11} strokeWidth={2.4} />
                   </button>
@@ -437,21 +451,47 @@ function EventModal({
               ))}
             </div>
           )}
-          <input
-            className={styles.textInput}
-            value={guestInput}
-            onChange={(e) => setGuestInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ',') {
-                e.preventDefault();
+          <div className={styles.guestSearch}>
+            <input
+              className={styles.textInput}
+              value={guestInput}
+              onChange={(e) => setGuestInput(e.target.value)}
+              onFocus={() => setFocused(true)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ',') {
+                  e.preventDefault();
+                  addGuest();
+                }
+              }}
+              onBlur={() => {
+                setFocused(false);
                 addGuest();
-              }
-            }}
-            onBlur={addGuest}
-            placeholder="guest@email.com — Enter to add"
-            inputMode="email"
-          />
-          <div className={styles.guestHint}>Guests are invited via your Google Calendar.</div>
+              }}
+              placeholder="Search name or email…"
+              inputMode="email"
+            />
+            {showPicks && (
+              <div className={styles.guestPicks}>
+                {picks.map((p) => (
+                  <button
+                    key={p.email}
+                    type="button"
+                    className={styles.guestPick}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      addEmail(p.email, p.name);
+                      setGuestInput('');
+                      setDebouncedQ('');
+                    }}
+                  >
+                    <span className={styles.guestPickName}>{p.name}</span>
+                    {p.name !== p.email && <span className={styles.guestPickEmail}>{p.email}</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className={styles.guestHint}>Type to search your contacts &amp; directory — guests are invited via Google.</div>
         </div>
 
         <div>

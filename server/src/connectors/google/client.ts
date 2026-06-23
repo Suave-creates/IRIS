@@ -72,4 +72,18 @@ export const googleClient = {
       headers: { 'Content-Type': contentType },
       body: typeof body === 'string' ? body : JSON.stringify(body),
     }),
+  patch: <T>(tenantId: string, url: string, body: unknown, contentType = 'application/json') =>
+    request<T>(tenantId, url, {
+      method: 'PATCH',
+      headers: { 'Content-Type': contentType },
+      body: typeof body === 'string' ? body : JSON.stringify(body),
+    }),
+  /** DELETE that tolerates 404/410 (already gone) and returns nothing. */
+  del: async (tenantId: string, url: string): Promise<void> => {
+    const res = await rawRequest(tenantId, url, { method: 'DELETE' });
+    if (!res.ok && res.status !== 404 && res.status !== 410) {
+      const text = await res.text().catch(() => '');
+      throw Errors.upstream(`Google API error (${res.status}): ${text.slice(0, 160)}`, 'Try reconnecting Google.');
+    }
+  },
 };

@@ -180,9 +180,10 @@ export async function syncCalendar(tenantId: string, userId: string): Promise<Sy
     const start = new Date(startRaw);
     const end = endRaw ? new Date(endRaw) : new Date(start.getTime() + 30 * 60_000);
     await execute(
-      `INSERT INTO calendar_events (id, tenant_id, user_id, title, start_at, end_at, color, location, notes, attendees, source)
-       VALUES (:id, :t, :u, :title, :s, :e, '#2a6fdb', :loc, :notes, :att, 'gcalendar')
-       ON DUPLICATE KEY UPDATE title=VALUES(title), start_at=VALUES(start_at), end_at=VALUES(end_at), location=VALUES(location), notes=VALUES(notes)`,
+      `INSERT INTO calendar_events (id, tenant_id, user_id, title, start_at, end_at, color, location, notes, attendees, source, google_event_id)
+       VALUES (:id, :t, :u, :title, :s, :e, '#2a6fdb', :loc, :notes, :att, 'gcalendar', :gid)
+       ON DUPLICATE KEY UPDATE title=VALUES(title), start_at=VALUES(start_at), end_at=VALUES(end_at),
+         location=VALUES(location), notes=VALUES(notes), attendees=VALUES(attendees), google_event_id=VALUES(google_event_id)`,
       {
         id: `evtg_${e.id}`.slice(0, 40),
         t: tenantId,
@@ -193,6 +194,7 @@ export async function syncCalendar(tenantId: string, userId: string): Promise<Sy
         loc: (e.location ?? '').slice(0, 160) || null,
         notes: (e.description ?? '').slice(0, 1000) || null,
         att: Array.isArray(e.attendees) ? e.attendees.length : 0,
+        gid: e.id ?? null,
       },
     );
     imported++;

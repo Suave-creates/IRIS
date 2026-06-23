@@ -117,6 +117,11 @@ export interface CalendarEventInput {
   /** Guest email addresses to invite via Google Calendar. */
   attendees?: string[];
 }
+/** A guest autocomplete suggestion (from contacts / Workspace directory). */
+export interface CalendarGuest {
+  name: string;
+  email: string;
+}
 
 // ── Mail ──────────────────────────────────────────────────────────────────
 export interface MailItem {

@@ -1,4 +1,4 @@
-import type { CalendarEvent, CalendarEventInput } from '@iris/shared';
+import type { CalendarEvent, CalendarEventInput, CalendarGuest } from '@iris/shared';
 import { api } from '@/lib/api';
 
 /** Calendar API surface. Mirrors the server module mounted at `/api/calendar`. */
@@ -9,4 +9,5 @@ export const calendarApi = {
   create: (input: CalendarEventInput) => api.post<CalendarEvent>('/calendar/events', input),
   update: (id: string, input: CalendarEventInput) => api.put<CalendarEvent>(`/calendar/events/${id}`, input),
   remove: (id: string) => api.delete<{ ok: true }>(`/calendar/events/${id}`),
+  guests: (q: string) => api.get<CalendarGuest[]>(`/calendar/guests?q=${encodeURIComponent(q)}`),
 };

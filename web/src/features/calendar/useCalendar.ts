@@ -13,6 +13,18 @@ export function useCalendarEvents(from: string, to: string) {
   });
 }
 
+/** Guest autocomplete suggestions for the add-guest box (enabled at 2+ chars). */
+export function useGuestSearch(query: string) {
+  const q = query.trim();
+  return useQuery({
+    queryKey: ['calendar', 'guests', q],
+    queryFn: () => calendarApi.guests(q),
+    enabled: q.length >= 2,
+    staleTime: 60_000,
+    placeholderData: (prev) => prev,
+  });
+}
+
 export function useCreateEvent(from: string, to: string) {
   const qc = useQueryClient();
   const key = calendarKey(from, to);

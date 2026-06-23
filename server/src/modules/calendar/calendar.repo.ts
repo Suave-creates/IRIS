@@ -16,6 +16,7 @@ export interface CalendarEventRow extends RowDataPacket {
   notes: string | null;
   attendees: number;
   source: string;
+  google_event_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -60,6 +61,8 @@ export interface CreateEventInput {
   source?: string;
   /** Guest count to store. */
   attendees?: number;
+  /** Full Google Calendar event id (for later patch/delete). */
+  googleEventId?: string | null;
 }
 
 export interface UpdateEventInput {
@@ -69,6 +72,8 @@ export interface UpdateEventInput {
   color: string;
   location?: string | null;
   notes?: string | null;
+  /** New guest count (null preserves the current value). */
+  attendees?: number | null;
 }
 
 export const calendarRepo = {
@@ -94,10 +99,11 @@ export const calendarRepo = {
   async create(input: CreateEventInput): Promise<CalendarEventRow> {
     const eventId = input.id ?? id('evt');
     await execute(
-      `INSERT INTO calendar_events (id, tenant_id, user_id, title, start_at, end_at, color, location, notes, attendees, source)
-       VALUES (:id, :tid, :uid, :title, :start, :end, :color, :location, :notes, :att, :source)
+      `INSERT INTO calendar_events (id, tenant_id, user_id, title, start_at, end_at, color, location, notes, attendees, source, google_event_id)
+       VALUES (:id, :tid, :uid, :title, :start, :end, :color, :location, :notes, :att, :source, :gid)
        ON DUPLICATE KEY UPDATE title=VALUES(title), start_at=VALUES(start_at), end_at=VALUES(end_at),
-         color=VALUES(color), location=VALUES(location), notes=VALUES(notes), attendees=VALUES(attendees)`,
+         color=VALUES(color), location=VALUES(location), notes=VALUES(notes), attendees=VALUES(attendees),
+         google_event_id=VALUES(google_event_id)`,
       {
         id: eventId,
         tid: input.tenantId,
@@ -110,6 +116,7 @@ export const calendarRepo = {
         notes: input.notes ?? null,
         att: input.attendees ?? 0,
         source: input.source ?? 'manual',
+        gid: input.googleEventId ?? null,
       },
     );
     const created = await this.findByIdForTenant(eventId, input.tenantId);
@@ -126,7 +133,8 @@ export const calendarRepo = {
          end_at   = :end,
          color    = :color,
          location = :location,
-         notes    = :notes
+         notes    = :notes,
+         attendees = COALESCE(:att, attendees)
        WHERE id = :id AND tenant_id = :tid`,
       {
         id: eventId,
@@ -137,6 +145,7 @@ export const calendarRepo = {
         color: patch.color,
         location: patch.location ?? null,
         notes: patch.notes ?? null,
+        att: patch.attendees ?? null,
       },
     );
   },

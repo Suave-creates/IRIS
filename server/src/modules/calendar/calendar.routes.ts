@@ -3,9 +3,26 @@ import { z } from 'zod';
 import type { CalendarEvent } from '@iris/shared';
 import { Errors } from '../../lib/errors.js';
 import { googleClient } from '../../connectors/google/client.js';
-import { createCalendarEvent } from '../../connectors/google/calendar.js';
+import {
+  createCalendarEvent,
+  deleteCalendarEvent,
+  searchPeople,
+  updateCalendarEvent,
+} from '../../connectors/google/calendar.js';
+import type { CalendarEventRow } from './calendar.repo.js';
 import { currentUser, requireAuth } from '../auth/guards.js';
 import { calendarRepo, toCalendarEvent } from './calendar.repo.js';
+
+/**
+ * The full Google event id for a row. Prefers the stored column; only falls back to the
+ * PK-derived id when the PK provably WASN'T truncated (len < 40) — otherwise returns null
+ * so we never patch/delete the wrong Google event from a truncated id.
+ */
+function googleIdOf(row: CalendarEventRow): string | null {
+  if (row.google_event_id) return row.google_event_id;
+  if (row.id.startsWith('evtg_') && row.id.length < 40) return row.id.slice(5);
+  return null;
+}
 
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 
@@ -77,6 +94,7 @@ export async function calendarRoutes(app: FastifyInstance): Promise<void> {
     // On failure (usually the calendar.events scope not yet granted) we still save locally.
     let gid: string | undefined;
     let source: string | undefined;
+    let googleEventId: string | undefined;
     let attendees = 0;
     if (await googleClient.isConnected(me.tenantId)) {
       try {
@@ -91,6 +109,7 @@ export async function calendarRoutes(app: FastifyInstance): Promise<void> {
         if (g.googleId) {
           gid = `evtg_${g.googleId}`.slice(0, 40);
           source = 'gcalendar';
+          googleEventId = g.googleId;
           attendees = g.attendees;
         }
       } catch (err) {
@@ -110,9 +129,23 @@ export async function calendarRoutes(app: FastifyInstance): Promise<void> {
       id: gid,
       source,
       attendees,
+      googleEventId,
     });
     reply.code(201);
     return { data: toCalendarEvent(row) };
+  });
+
+  // Guest autocomplete — searches the user's contacts + Workspace directory.
+  app.get('/guests', async (req) => {
+    const me = currentUser(req);
+    const { q } = z.object({ q: z.string().trim().max(120).optional() }).parse(req.query);
+    if (!q || q.length < 2 || !(await googleClient.isConnected(me.tenantId))) return { data: [] };
+    try {
+      return { data: await searchPeople(me.tenantId, q) };
+    } catch (err) {
+      req.log.warn({ err }, 'guest search failed');
+      return { data: [] };
+    }
   });
 
   app.put('/events/:id', async (req) => {
@@ -126,6 +159,30 @@ export async function calendarRoutes(app: FastifyInstance): Promise<void> {
     const existing = await calendarRepo.findByIdForTenant(eventId, me.tenantId);
     if (!existing) throw Errors.notFound('Calendar event not found.');
 
+    // Mirror the edit to Google when it originated there. Guests are only sent when
+    // supplied, so editing other fields can't wipe existing invitees.
+    const guestsProvided = (body.attendees?.length ?? 0) > 0;
+    let attendees: number | null = guestsProvided ? (body.attendees?.length ?? 0) : null;
+    const googleId = existing.source === 'gcalendar' ? googleIdOf(existing) : null;
+    if (existing.source === 'gcalendar' && !googleId) {
+      req.log.warn({ id: existing.id }, 'gcalendar event has no resolvable Google id; editing locally only');
+    }
+    if (googleId && (await googleClient.isConnected(me.tenantId))) {
+      try {
+        const g = await updateCalendarEvent(me.tenantId, googleId, {
+          title: body.title,
+          startAt: body.startAt,
+          endAt: body.endAt,
+          location: body.location ?? null,
+          notes: body.notes ?? null,
+          attendees: body.attendees ?? [],
+        });
+        if (guestsProvided) attendees = g.attendees;
+      } catch (err) {
+        req.log.warn({ err }, 'Google Calendar update failed; updating event locally only');
+      }
+    }
+
     await calendarRepo.update(eventId, me.tenantId, {
       title: body.title,
       startAt: toMysqlDateTime(body.startAt),
@@ -133,6 +190,7 @@ export async function calendarRoutes(app: FastifyInstance): Promise<void> {
       color: body.color,
       location: body.location ?? null,
       notes: body.notes ?? null,
+      attendees,
     });
     const updated = await calendarRepo.findByIdForTenant(eventId, me.tenantId);
     if (!updated) throw Errors.notFound('Calendar event not found.');
@@ -142,8 +200,23 @@ export async function calendarRoutes(app: FastifyInstance): Promise<void> {
   app.delete('/events/:id', async (req) => {
     const me = currentUser(req);
     const { id: eventId } = idParamSchema.parse(req.params);
-    const affected = await calendarRepo.delete(eventId, me.tenantId);
-    if (affected === 0) throw Errors.notFound('Calendar event not found.');
+    const existing = await calendarRepo.findByIdForTenant(eventId, me.tenantId);
+    if (!existing) throw Errors.notFound('Calendar event not found.');
+
+    // Remove from Google too when it lives there (and notify guests).
+    const googleId = existing.source === 'gcalendar' ? googleIdOf(existing) : null;
+    if (existing.source === 'gcalendar' && !googleId) {
+      req.log.warn({ id: existing.id }, 'gcalendar event has no resolvable Google id; deleting locally only');
+    }
+    if (googleId && (await googleClient.isConnected(me.tenantId))) {
+      try {
+        await deleteCalendarEvent(me.tenantId, googleId);
+      } catch (err) {
+        req.log.warn({ err }, 'Google Calendar delete failed; removing event locally only');
+      }
+    }
+
+    await calendarRepo.delete(eventId, me.tenantId);
     return { data: { ok: true } };
   });
 }

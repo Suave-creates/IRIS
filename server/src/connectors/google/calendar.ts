@@ -23,16 +23,14 @@ export interface GoogleEventResult {
   htmlLink: string | null;
 }
 
-/**
- * Creates an event on the user's primary Google Calendar and invites any guests.
- * Requires the calendar.events write scope (the user must reconnect Google to grant it).
- */
-export async function createCalendarEvent(tenantId: string, input: GoogleEventInput): Promise<GoogleEventResult> {
-  const guests = (input.attendees ?? [])
-    .map((e) => e.trim().toLowerCase())
-    .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
-  const attendees = [...new Set(guests)].map((email) => ({ email }));
+const EVENTS_URL = 'https://www.googleapis.com/calendar/v3/calendars/primary/events';
 
+const isEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+
+/** Builds the events.insert/patch body + the validated attendee list. */
+function buildBody(input: GoogleEventInput): { body: Record<string, unknown>; attendees: { email: string }[] } {
+  const guests = (input.attendees ?? []).map((e) => e.trim().toLowerCase()).filter(isEmail);
+  const attendees = [...new Set(guests)].map((email) => ({ email }));
   const body: Record<string, unknown> = {
     summary: input.title,
     start: { dateTime: input.startAt },
@@ -41,17 +39,128 @@ export async function createCalendarEvent(tenantId: string, input: GoogleEventIn
   if (input.notes) body.description = input.notes;
   if (input.location) body.location = input.location;
   if (attendees.length) body.attendees = attendees;
+  return { body, attendees };
+}
 
-  // sendUpdates=all so guests receive the invite email.
+/** Creates an event on the user's primary Google Calendar and invites any guests. */
+export async function createCalendarEvent(tenantId: string, input: GoogleEventInput): Promise<GoogleEventResult> {
+  const { body, attendees } = buildBody(input);
   const qs = attendees.length ? '?sendUpdates=all' : '';
-  const ev = await googleClient.post<GoogleEvent>(
+  const ev = await googleClient.post<GoogleEvent>(tenantId, `${EVENTS_URL}${qs}`, body);
+  return { googleId: ev.id ?? '', attendees: ev.attendees?.length ?? attendees.length, htmlLink: ev.htmlLink ?? null };
+}
+
+/**
+ * Patches an existing Google Calendar event. events.patch REPLACES the attendees
+ * array wholesale, and the client only sends newly-added guests — so to avoid wiping
+ * existing invitees we read the event's current attendees and UNION the new ones in
+ * (preserving each attendee's RSVP object). When no guests are supplied, attendees is
+ * left untouched. (Guest removal is therefore done in Google, not here.)
+ */
+export async function updateCalendarEvent(
+  tenantId: string,
+  googleEventId: string,
+  input: GoogleEventInput,
+): Promise<GoogleEventResult> {
+  const newGuests = [...new Set((input.attendees ?? []).map((e) => e.trim().toLowerCase()).filter(isEmail))];
+
+  const body: Record<string, unknown> = {
+    summary: input.title,
+    start: { dateTime: input.startAt },
+    end: { dateTime: input.endAt },
+  };
+  if (input.notes) body.description = input.notes;
+  if (input.location) body.location = input.location;
+
+  let attendeeCount = 0;
+  if (newGuests.length) {
+    let current: Record<string, unknown>[] = [];
+    try {
+      const existing = await googleClient.get<{ attendees?: Record<string, unknown>[] }>(
+        tenantId,
+        `${EVENTS_URL}/${encodeURIComponent(googleEventId)}?fields=attendees`,
+      );
+      current = existing.attendees ?? [];
+    } catch {
+      /* no current attendees readable — fall back to just the new guests */
+    }
+    const have = new Set(current.map((a) => String(a.email ?? '').toLowerCase()));
+    const merged = [...current, ...newGuests.filter((e) => !have.has(e)).map((email) => ({ email }))];
+    body.attendees = merged;
+    attendeeCount = merged.length;
+  }
+
+  const qs = newGuests.length ? '?sendUpdates=all' : '';
+  const ev = await googleClient.patch<GoogleEvent>(
     tenantId,
-    `https://www.googleapis.com/calendar/v3/calendars/primary/events${qs}`,
+    `${EVENTS_URL}/${encodeURIComponent(googleEventId)}${qs}`,
     body,
   );
-  return {
-    googleId: ev.id ?? '',
-    attendees: ev.attendees?.length ?? attendees.length,
-    htmlLink: ev.htmlLink ?? null,
-  };
+  return { googleId: ev.id ?? googleEventId, attendees: ev.attendees?.length ?? attendeeCount, htmlLink: ev.htmlLink ?? null };
+}
+
+/** Deletes an event from the user's primary Google Calendar (notifies guests). */
+export async function deleteCalendarEvent(tenantId: string, googleEventId: string): Promise<void> {
+  await googleClient.del(tenantId, `${EVENTS_URL}/${encodeURIComponent(googleEventId)}?sendUpdates=all`);
+}
+
+// ── Guest suggestions (People API) ─────────────────────────────────────────────
+export interface PersonSuggestion {
+  name: string;
+  email: string;
+}
+interface PeopleResult {
+  results?: { person?: { names?: { displayName?: string }[]; emailAddresses?: { value?: string }[] } }[];
+  people?: { names?: { displayName?: string }[]; emailAddresses?: { value?: string }[] }[];
+}
+
+function mapPeople(data: PeopleResult): PersonSuggestion[] {
+  const rows = data.results?.map((r) => r.person) ?? data.people ?? [];
+  const out: PersonSuggestion[] = [];
+  for (const p of rows) {
+    const email = p?.emailAddresses?.[0]?.value?.trim();
+    if (!email) continue;
+    out.push({ name: p?.names?.[0]?.displayName?.trim() || email, email });
+  }
+  return out;
+}
+
+/**
+ * Suggests guests for the add-guest box — searches the user's contacts and the
+ * Workspace directory (coworkers), like Google Calendar's autocomplete. Each source
+ * is best-effort: a missing scope simply yields no results from that source.
+ */
+export async function searchPeople(tenantId: string, query: string): Promise<PersonSuggestion[]> {
+  const q = query.trim();
+  if (q.length < 2) return [];
+  const readMask = encodeURIComponent('names,emailAddresses');
+  const enc = encodeURIComponent(q);
+
+  const directory = googleClient
+    .get<PeopleResult>(
+      tenantId,
+      `https://people.googleapis.com/v1/people:searchDirectoryPeople?query=${enc}&readMask=${readMask}&sources=DIRECTORY_SOURCE_TYPE_DOMAIN_PROFILE&pageSize=10`,
+    )
+    .then(mapPeople)
+    .catch(() => [] as PersonSuggestion[]);
+
+  const contacts = googleClient
+    .get<PeopleResult>(
+      tenantId,
+      `https://people.googleapis.com/v1/people:searchContacts?query=${enc}&readMask=${readMask}&pageSize=10`,
+    )
+    .then(mapPeople)
+    .catch(() => [] as PersonSuggestion[]);
+
+  const [dir, con] = await Promise.all([directory, contacts]);
+  const seen = new Set<string>();
+  const merged: PersonSuggestion[] = [];
+  for (const p of [...dir, ...con]) {
+    const key = p.email.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(p);
+    if (merged.length >= 8) break;
+  }
+  return merged;
 }

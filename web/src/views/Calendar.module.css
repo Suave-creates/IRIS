@@ -301,6 +301,47 @@
   color: var(--text-3);
   margin-top: 5px;
 }
+.guestSearch {
+  position: relative;
+}
+.guestPicks {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  background: var(--surface);
+  border: 1px solid var(--border-2);
+  border-radius: 10px;
+  box-shadow: var(--shadow-3, 0 12px 32px rgba(0, 0, 0, 0.18));
+  padding: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.guestPick {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+  text-align: left;
+  padding: 7px 9px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  cursor: pointer;
+}
+.guestPick:hover {
+  background: var(--surface-2);
+}
+.guestPickName {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.guestPickEmail {
+  font-size: 11.5px;
+  color: var(--text-3);
+}
 .threeCol {
   display: flex;
   gap: 10px;
