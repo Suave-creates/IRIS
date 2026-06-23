@@ -1,14 +1,15 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { Project, ProjectSource } from '@iris/shared';
+import type { Priority, Project, ProjectSource } from '@iris/shared';
 import { Button, Modal, Spinner } from '@/components/primitives';
-import { ArrowUpRight, Calendar, Database, Folder, Plus, Refresh, Sparkle, X } from '@/components/icons';
+import { ArrowUpRight, Calendar, Database, Folder, Plus, Refresh, Search, Sparkle, X } from '@/components/icons';
 import { ApiError } from '@/lib/api';
 import {
   useAvailableSources,
   useDeleteSource,
   useFetchProjects,
   useLinkSource,
+  useLinkSourceByRef,
   useProjectSources,
   useProjects,
 } from '@/features/projects/useProjects';
@@ -33,6 +34,9 @@ const SOURCE_STATUS: Record<ProjectSource['status'], { label: string; color: str
   scanned: { label: 'Scanned', color: 'var(--success)' },
 };
 
+/** Sentinel for the "all sources" filter option. */
+const SOURCE_ALL = '__all__';
+
 export function Projects() {
   const projects = useProjects();
   const sources = useProjectSources();
@@ -43,8 +47,47 @@ export function Projects() {
   const [openProject, setOpenProject] = useState<Project | null>(null);
   const [pickerType, setPickerType] = useState<ProjectSource['type'] | null>(null);
 
+  const [query, setQuery] = useState('');
+  const [priorityFilter, setPriorityFilter] = useState<'all' | Priority>('all');
+  const [sourceFilter, setSourceFilter] = useState<string>(SOURCE_ALL);
+
   const fetchErr =
     fetchProjects.error instanceof ApiError ? fetchProjects.error.message : null;
+
+  const allProjects = projects.data ?? [];
+
+  // Distinct source files present (each linked sheet/doc/folder, plus non-file origins).
+  const sourceOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const p of allProjects) {
+      const key = p.sourceDetail ?? `kind:${p.source}`;
+      if (!map.has(key)) map.set(key, p.sourceDetail ?? SOURCE_META[p.source].label);
+    }
+    return [...map].map(([key, label]) => ({ key, label })).sort((a, b) => a.label.localeCompare(b.label));
+  }, [allProjects]);
+
+  // Priorities present, in severity order.
+  const priorityOptions = useMemo(() => {
+    const present = new Set(allProjects.map((p) => p.priority));
+    return (['critical', 'high', 'med', 'low'] as Priority[]).filter((p) => present.has(p));
+  }, [allProjects]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return allProjects.filter((p) => {
+      if (priorityFilter !== 'all' && p.priority !== priorityFilter) return false;
+      if (sourceFilter !== SOURCE_ALL && (p.sourceDetail ?? `kind:${p.source}`) !== sourceFilter) return false;
+      if (q) {
+        const hay = [p.name, p.summary, p.sourceDetail ?? '', ...p.fields.map((f) => `${f.label} ${f.value}`)]
+          .join(' ')
+          .toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [allProjects, query, priorityFilter, sourceFilter]);
+
+  const filtersActive = query.trim() !== '' || priorityFilter !== 'all' || sourceFilter !== SOURCE_ALL;
 
   return (
     <div className={styles.page}>
@@ -163,16 +206,90 @@ export function Projects() {
         <div className={styles.inlineError}>
           {(projects.error as Error)?.message ?? 'Could not load projects.'}
         </div>
-      ) : projects.data && projects.data.length === 0 ? (
+      ) : allProjects.length === 0 ? (
         <div className={styles.emptyState}>
           No projects yet. Link a source and fetch, or add one manually.
         </div>
       ) : (
-        <div className={styles.cardsGrid}>
-          {projects.data?.map((p) => (
-            <ProjectCard key={p.id} project={p} onOpen={() => setOpenProject(p)} />
-          ))}
-        </div>
+        <>
+          <div className={styles.toolbar}>
+            <div className={styles.searchWrap}>
+              <Search size={15} strokeWidth={2} className={styles.searchIcon} />
+              <input
+                className={styles.searchInput}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search projects by name, summary, or field…"
+                aria-label="Search projects"
+              />
+              {query && (
+                <button className={styles.searchClear} onClick={() => setQuery('')} aria-label="Clear search">
+                  <X size={12} strokeWidth={2.4} />
+                </button>
+              )}
+            </div>
+
+            <label className={styles.selectField}>
+              <span className={styles.selectLabel}>Priority</span>
+              <select
+                value={priorityFilter}
+                onChange={(e) => setPriorityFilter(e.target.value as 'all' | Priority)}
+                aria-label="Filter by priority"
+              >
+                <option value="all">All priorities</option>
+                {priorityOptions.map((p) => (
+                  <option key={p} value={p}>
+                    {PRIORITY_META[p].label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className={styles.selectField}>
+              <span className={styles.selectLabel}>Source file</span>
+              <select
+                value={sourceFilter}
+                onChange={(e) => setSourceFilter(e.target.value)}
+                aria-label="Filter by source file"
+              >
+                <option value={SOURCE_ALL}>All sources</option>
+                {sourceOptions.map((o) => (
+                  <option key={o.key} value={o.key}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <span className={styles.resultCount}>
+              {filtered.length} of {allProjects.length}
+            </span>
+          </div>
+
+          {filtered.length === 0 ? (
+            <div className={styles.emptyState}>
+              No projects match your filters.{' '}
+              {filtersActive && (
+                <button
+                  className={styles.linkBtn}
+                  onClick={() => {
+                    setQuery('');
+                    setPriorityFilter('all');
+                    setSourceFilter(SOURCE_ALL);
+                  }}
+                >
+                  Clear filters
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className={styles.cardsGrid}>
+              {filtered.map((p) => (
+                <ProjectCard key={p.id} project={p} onOpen={() => setOpenProject(p)} />
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       <AddProjectModal open={addOpen} onClose={() => setAddOpen(false)} />
@@ -183,13 +300,37 @@ export function Projects() {
 }
 
 const TYPE_LABEL: Record<ProjectSource['type'], string> = { folder: 'folder', sheet: 'sheet', doc: 'doc' };
+const REF_PLACEHOLDER: Record<ProjectSource['type'], string> = {
+  sheet: 'Paste a Google Sheets link or ID',
+  doc: 'Paste a Google Docs link or ID',
+  folder: 'Paste a Drive folder link or ID',
+};
 
-/** Lists real Drive items of a type and links the chosen one as a project source. */
+/** Links a Drive item — by pasted URL/ID (reliable) or by picking from the live Drive list. */
 function SourcePicker({ type, onClose }: { type: ProjectSource['type'] | null; onClose: () => void }) {
   const navigate = useNavigate();
   const available = useAvailableSources(type);
   const link = useLinkSource();
+  const linkByRef = useLinkSourceByRef();
+  const [ref, setRef] = useState('');
   const notConnected = available.error instanceof ApiError && available.error.code === 'UPSTREAM_UNAVAILABLE';
+  const refErr = linkByRef.error instanceof ApiError ? linkByRef.error.message : null;
+  const listErr = link.error instanceof ApiError ? link.error.message : null;
+
+  // Reset both mutations' state whenever the picker opens for a different type.
+  const resetRefLink = linkByRef.reset;
+  const resetListLink = link.reset;
+  useEffect(() => {
+    setRef('');
+    resetRefLink();
+    resetListLink();
+  }, [type, resetRefLink, resetListLink]);
+
+  const submitRef = () => {
+    const value = ref.trim();
+    if (!value || !type || linkByRef.isPending) return;
+    linkByRef.mutate({ type, ref: value }, { onSuccess: onClose });
+  };
 
   return (
     <Modal open={type !== null} onClose={onClose} width={460} ariaLabel="Link a source">
@@ -200,6 +341,40 @@ function SourcePicker({ type, onClose }: { type: ProjectSource['type'] | null; o
         </button>
       </div>
       <div className={styles.pickerBody}>
+        {/* Paste a link / ID — works even when Drive listing is blocked */}
+        <div className={styles.refForm}>
+          <div className={styles.refRow}>
+            <input
+              className={styles.refInput}
+              value={ref}
+              onChange={(e) => setRef(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  submitRef();
+                }
+              }}
+              placeholder={type ? REF_PLACEHOLDER[type] : 'Paste a link or ID'}
+              aria-label="Google link or ID"
+              autoFocus
+            />
+            <Button onClick={submitRef} loading={linkByRef.isPending} disabled={!ref.trim()}>
+              Link
+            </Button>
+          </div>
+          {refErr ? (
+            <div className={styles.refError}>{refErr}</div>
+          ) : (
+            <div className={styles.pickerHint}>
+              We&apos;ll fetch the {type ? TYPE_LABEL[type] : 'item'}&apos;s real title automatically.
+            </div>
+          )}
+        </div>
+
+        <div className={styles.pickerDivider}>
+          <span>or pick from your Drive</span>
+        </div>
+
         {available.isLoading && (
           <div className={styles.pickerCenter}>
             <Spinner size={20} />
@@ -217,8 +392,11 @@ function SourcePicker({ type, onClose }: { type: ProjectSource['type'] | null; o
             </div>
           ))}
         {available.data && available.data.length === 0 && (
-          <div className={styles.pickerEmpty}>No {type ? TYPE_LABEL[type] : 'item'}s found in your Drive.</div>
+          <div className={styles.pickerEmpty}>
+            No {type ? TYPE_LABEL[type] : 'item'}s found in your Drive — paste a link above instead.
+          </div>
         )}
+        {listErr && <div className={styles.refError}>{listErr}</div>}
         {available.data?.map((item) => (
           <button
             key={item.externalId}

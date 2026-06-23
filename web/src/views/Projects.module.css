@@ -103,6 +103,64 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.refForm {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 4px 4px 8px;
+}
+.refRow {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.refInput {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+.refInput:focus {
+  border-color: var(--accent);
+}
+.refInput::placeholder {
+  color: var(--text-3);
+}
+.pickerHint {
+  font-size: 11.5px;
+  color: var(--text-3);
+  padding-left: 2px;
+}
+.refError {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--danger);
+  padding-left: 2px;
+}
+.pickerDivider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.pickerDivider::before,
+.pickerDivider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
 
 /* ── Header ────────────────────────────────────────────────────────── */
 .header {
@@ -317,6 +375,123 @@
 .fetchSub {
   font-size: 12.5px;
   color: var(--text-2);
+}
+
+/* ── Filter / search toolbar ───────────────────────────────────────── */
+.toolbar {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.searchWrap {
+  position: relative;
+  flex: 1 1 260px;
+  min-width: 200px;
+  display: flex;
+  align-items: center;
+}
+.searchIcon {
+  position: absolute;
+  left: 12px;
+  color: var(--text-3);
+  pointer-events: none;
+}
+.searchInput {
+  width: 100%;
+  font-size: 13.5px;
+  padding: 10px 32px 10px 34px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+.searchInput:focus {
+  border-color: var(--accent);
+}
+.searchInput::placeholder {
+  color: var(--text-3);
+}
+.searchClear {
+  position: absolute;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.searchClear:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.selectField {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.selectLabel {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  padding-left: 2px;
+}
+.selectField select {
+  appearance: none;
+  -webkit-appearance: none;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 9px 30px 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  outline: none;
+  min-width: 140px;
+  max-width: 240px;
+}
+.selectField select:focus {
+  border-color: var(--accent);
+}
+.selectField::after {
+  content: '▾';
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  font-size: 11px;
+  color: var(--text-3);
+  pointer-events: none;
+}
+.resultCount {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-3);
+  white-space: nowrap;
+  padding-bottom: 10px;
+}
+.linkBtn {
+  border: none;
+  background: none;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0;
+}
+.linkBtn:hover {
+  text-decoration: underline;
 }
 
 /* ── Cards grid ────────────────────────────────────────────────────── */

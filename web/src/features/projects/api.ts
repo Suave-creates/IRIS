@@ -8,6 +8,11 @@ export interface LinkSourceInput {
   webLink?: string | null;
 }
 
+export interface LinkByRefInput {
+  type: ProjectSource['type'];
+  ref: string;
+}
+
 export const projectsApi = {
   list: () => api.get<Project[]>('/projects'),
   create: (input: CreateProjectInput) => api.post<Project>('/projects', input),
@@ -30,6 +35,7 @@ export const projectsApi = {
   availableSources: (type: ProjectSource['type']) =>
     api.get<AvailableSource[]>(`/projects/sources/available?type=${type}`),
   linkSource: (input: LinkSourceInput) => api.post<ProjectSource>('/projects/sources', input),
+  linkSourceByRef: (input: LinkByRefInput) => api.post<ProjectSource>('/projects/sources/by-ref', input),
   deleteSource: (id: string) => api.delete<{ ok: boolean }>(`/projects/sources/${id}`),
   fetch: () => api.post<Project[]>('/projects/fetch'),
 };

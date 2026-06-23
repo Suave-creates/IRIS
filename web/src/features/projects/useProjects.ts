@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import type { Project, ProjectSource, UpdateProjectInput } from '@iris/shared';
-import { projectsApi, type LinkSourceInput } from './api';
+import { projectsApi, type LinkByRefInput, type LinkSourceInput } from './api';
 
 const projectsKey = ['projects'] as const;
 const sourcesKey = ['projects', 'sources'] as const;
@@ -125,6 +125,18 @@ export function useLinkSource() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: LinkSourceInput) => projectsApi.linkSource(input),
+    onSuccess: (created) => {
+      qc.setQueryData<ProjectSource[]>(sourcesKey, (prev) => (prev ? [...prev, created] : [created]));
+      void qc.invalidateQueries({ queryKey: sourcesKey });
+    },
+  });
+}
+
+/** Links a source from a pasted Google URL or ID (reliable when listing is blocked). */
+export function useLinkSourceByRef() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: LinkByRefInput) => projectsApi.linkSourceByRef(input),
     onSuccess: (created) => {
       qc.setQueryData<ProjectSource[]>(sourcesKey, (prev) => (prev ? [...prev, created] : [created]));
       void qc.invalidateQueries({ queryKey: sourcesKey });
