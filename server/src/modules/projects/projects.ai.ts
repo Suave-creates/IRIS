@@ -16,33 +16,57 @@ export interface ExtractedProject {
   currentStage: number;
 }
 
+const PROJECT_ITEM_SCHEMA = {
+  type: 'object',
+  properties: {
+    name: { type: 'string', description: 'Concise project name' },
+    summary: { type: 'string', description: '1–2 crisp, action-oriented sentences for an executive' },
+    priority: { type: 'string', enum: ['critical', 'high', 'med', 'low'] },
+    deadline: { type: 'string', description: 'YYYY-MM-DD if a clear deadline exists, else empty string' },
+    status: { type: 'string', description: 'e.g. Planning, In progress, Review, At risk, Blocked, On track' },
+    fields: {
+      type: 'array',
+      description: '3–5 key facts as label/value pairs',
+      items: { type: 'object', properties: { label: { type: 'string' }, value: { type: 'string' } }, required: ['label', 'value'] },
+    },
+    tasks: {
+      type: 'array',
+      description: 'Up to 5 concrete next tasks',
+      items: { type: 'object', properties: { title: { type: 'string' } }, required: ['title'] },
+    },
+    stages: { type: 'array', items: { type: 'string' }, description: 'Ordered milestone names' },
+    currentStage: { type: 'integer', description: 'Index into stages of the current milestone' },
+  },
+  required: ['name', 'summary', 'priority', 'status', 'fields', 'tasks', 'stages', 'currentStage'],
+};
+
 const EXTRACT_TOOL: Anthropic.Tool = {
-  name: 'record_project',
-  description: 'Record the single most relevant executive project distilled from the source content.',
+  name: 'record_projects',
+  description: 'Record every distinct executive project distilled from the source content.',
   input_schema: {
     type: 'object',
     properties: {
-      name: { type: 'string', description: 'Concise project name' },
-      summary: { type: 'string', description: '1–2 crisp, action-oriented sentences for an executive' },
-      priority: { type: 'string', enum: ['critical', 'high', 'med', 'low'] },
-      deadline: { type: 'string', description: 'YYYY-MM-DD if a clear deadline exists, else empty string' },
-      status: { type: 'string', description: 'e.g. Planning, In progress, Review, At risk, Blocked, On track' },
-      fields: {
+      projects: {
         type: 'array',
-        description: '3–5 key facts as label/value pairs',
-        items: { type: 'object', properties: { label: { type: 'string' }, value: { type: 'string' } }, required: ['label', 'value'] },
+        description:
+          'All distinct, real projects found in the source. If the source is a tracker/sheet that lists many ' +
+          'projects (typically one per row), return ONE entry per project — never merge them. Filter out noise, ' +
+          'headers, totals, and empty/irrelevant rows.',
+        items: PROJECT_ITEM_SCHEMA,
       },
-      tasks: {
-        type: 'array',
-        description: 'Up to 5 concrete next tasks',
-        items: { type: 'object', properties: { title: { type: 'string' } }, required: ['title'] },
-      },
-      stages: { type: 'array', items: { type: 'string' }, description: 'Ordered milestone names' },
-      currentStage: { type: 'integer', description: 'Index into stages of the current milestone' },
     },
-    required: ['name', 'summary', 'priority', 'status', 'fields', 'tasks', 'stages', 'currentStage'],
+    required: ['projects'],
   },
 };
+
+/** Upper bound on cards extracted from a single source (guards against runaway sheets). */
+const MAX_PROJECTS_PER_SOURCE = 150;
+/** Rows per AI call when extracting from a tracker sheet (keeps each call well clear of truncation). */
+const SHEET_ROW_CHUNK = 14;
+/** Hard ceiling on data rows considered from one sheet. */
+const MAX_SHEET_DATA_ROWS = 250;
+/** Concurrent chunk extractions (balances latency against upstream rate limits). */
+const CHUNK_CONCURRENCY = 4;
 
 function normalizeDeadline(raw: unknown): string | null {
   if (typeof raw !== 'string' || !raw.trim()) return null;
@@ -53,12 +77,45 @@ function normalizeDeadline(raw: unknown): string | null {
 
 const VALID_PRIORITY = new Set<Priority>(['critical', 'high', 'med', 'low']);
 
-/** Distills one clean, relevant project from (noisy) source content using Claude. */
-export async function extractProject(
+/** Coerces one raw tool-emitted project object into a safe ExtractedProject. */
+function normalizeProject(raw: Record<string, unknown>, sourceName: string, content: string): ExtractedProject {
+  const priority = VALID_PRIORITY.has(raw.priority as Priority) ? (raw.priority as Priority) : 'med';
+  const fields = Array.isArray(raw.fields)
+    ? (raw.fields as { label?: unknown; value?: unknown }[])
+        .filter((f) => typeof f.label === 'string' && typeof f.value === 'string')
+        .map((f) => ({ label: String(f.label).slice(0, 80), value: String(f.value).slice(0, 200) }))
+    : [];
+  const tasks = Array.isArray(raw.tasks)
+    ? (raw.tasks as { title?: unknown }[])
+        .filter((t) => typeof t.title === 'string')
+        .map((t) => ({ title: String(t.title).slice(0, 255) }))
+    : [];
+  const stages = Array.isArray(raw.stages)
+    ? (raw.stages as unknown[]).filter((s): s is string => typeof s === 'string')
+    : [];
+  const summary = content.replace(/\s+/g, ' ').trim().slice(0, 180) || `Project from ${sourceName}.`;
+  return {
+    name: (typeof raw.name === 'string' && raw.name.trim()) || sourceName,
+    summary: (typeof raw.summary === 'string' && raw.summary.trim()) || summary,
+    priority,
+    status: (typeof raw.status === 'string' && raw.status.trim()) || 'In progress',
+    deadline: normalizeDeadline(raw.deadline),
+    fields: fields.length ? fields : [{ label: 'Source', value: sourceName }],
+    tasks,
+    stages: stages.length ? stages : ['Planning', 'In progress', 'Review', 'Done'],
+    currentStage: typeof raw.currentStage === 'number' ? Math.max(0, Math.min(raw.currentStage, (stages.length || 4) - 1)) : 1,
+  };
+}
+
+/**
+ * Distills EVERY distinct, relevant project from (noisy) source content using Claude.
+ * A tracker sheet that lists many projects yields one card per project.
+ */
+export async function extractProjects(
   type: 'folder' | 'sheet' | 'doc',
   sourceName: string,
   content: string,
-): Promise<ExtractedProject> {
+): Promise<ExtractedProject[]> {
   const fallback: ExtractedProject = {
     name: sourceName,
     summary: content.replace(/\s+/g, ' ').trim().slice(0, 180) || `Project from ${sourceName}.`,
@@ -70,52 +127,152 @@ export async function extractProject(
     stages: ['Planning', 'In progress', 'Review', 'Done'],
     currentStage: 1,
   };
-  if (!hasAnthropic || !content.trim()) return fallback;
+  if (!hasAnthropic || !content.trim()) return [fallback];
 
   try {
-    const result = await extractWithTool<Record<string, unknown>>({
+    const result = await extractWithTool<{ projects?: unknown[] }>({
       system: systemBlocks(
         `You are IRIS, an executive chief-of-staff. The text below is the (often noisy) content of a linked ${type} named "${sourceName}". ` +
-          `Extract the SINGLE most relevant executive project. Ignore boilerplate, navigation, signatures, repeated headers, and irrelevant chatter. ` +
-          `Write a tight, action-oriented summary. Choose a sensible priority and status, 3–5 key fields, realistic ordered stages with the current index, and up to 5 concrete next tasks. ` +
-          `If there is no real project, produce a best-effort card named after the source. Call record_project exactly once.`,
+          `Identify EVERY distinct, real project it describes and call record_projects exactly once with all of them. ` +
+          `Many sources are trackers that list one project per row — return one entry per project and never merge them. ` +
+          `Ignore boilerplate, navigation, signatures, repeated headers, totals, and empty or irrelevant rows. ` +
+          `For each project write a tight, action-oriented summary, a sensible priority and status, 3–5 key fields, ` +
+          `realistic ordered stages with the current index, and up to 5 concrete next tasks. ` +
+          `If the source contains no real project, return an empty projects array.`,
       ),
       messages: [{ role: 'user', content: `Source: ${sourceName} (${type})\n\nContent:\n"""${content}"""` }],
       tool: EXTRACT_TOOL,
-      maxTokens: 1200,
+      // Headroom for many rich cards — a truncated tool response would parse-fail and
+      // collapse back to a single fallback card.
+      maxTokens: 16000,
     });
-    if (!result) return fallback;
 
-    const priority = VALID_PRIORITY.has(result.priority as Priority) ? (result.priority as Priority) : 'med';
-    const fields = Array.isArray(result.fields)
-      ? (result.fields as { label?: unknown; value?: unknown }[])
-          .filter((f) => typeof f.label === 'string' && typeof f.value === 'string')
-          .map((f) => ({ label: String(f.label).slice(0, 80), value: String(f.value).slice(0, 200) }))
-      : [];
-    const tasks = Array.isArray(result.tasks)
-      ? (result.tasks as { title?: unknown }[])
-          .filter((t) => typeof t.title === 'string')
-          .map((t) => ({ title: String(t.title).slice(0, 255) }))
-      : [];
-    const stages = Array.isArray(result.stages)
-      ? (result.stages as unknown[]).filter((s): s is string => typeof s === 'string')
-      : [];
-
-    return {
-      name: (typeof result.name === 'string' && result.name.trim()) || sourceName,
-      summary: (typeof result.summary === 'string' && result.summary.trim()) || fallback.summary,
-      priority,
-      status: (typeof result.status === 'string' && result.status.trim()) || 'In progress',
-      deadline: normalizeDeadline(result.deadline),
-      fields: fields.length ? fields : fallback.fields,
-      tasks,
-      stages: stages.length ? stages : fallback.stages,
-      currentStage: typeof result.currentStage === 'number' ? Math.max(0, Math.min(result.currentStage, (stages.length || 4) - 1)) : 1,
-    };
+    const rawProjects = Array.isArray(result?.projects) ? result!.projects : [];
+    const projects = rawProjects
+      .filter((p): p is Record<string, unknown> => !!p && typeof p === 'object')
+      .slice(0, MAX_PROJECTS_PER_SOURCE)
+      .map((p) => normalizeProject(p, sourceName, content));
+    return projects.length ? projects : [fallback];
   } catch (err) {
     logger.warn({ err, sourceName }, 'project extraction failed — using fallback');
-    return fallback;
+    return [fallback];
   }
+}
+
+// ── Structured sheet extraction (one card per row, chunked + parallel) ──────────
+
+/** Picks the most label-dense row among the first few as the header. */
+function pickHeader(values: string[][]): { headerIdx: number; header: string[] } {
+  let bestIdx = 0;
+  let bestCount = -1;
+  const limit = Math.min(values.length, 6);
+  for (let i = 0; i < limit; i++) {
+    const count = values[i]!.filter((c) => c.trim()).length;
+    if (count > bestCount) {
+      bestCount = count;
+      bestIdx = i;
+    }
+  }
+  return { headerIdx: bestIdx, header: values[bestIdx] ?? [] };
+}
+
+/** Renders one sheet row as a labeled, unambiguous record; null if the row is empty. */
+function formatRecord(n: number, header: string[], row: string[]): string | null {
+  const cols = Math.max(header.length, row.length);
+  const pairs: string[] = [];
+  for (let c = 0; c < cols; c++) {
+    const val = (row[c] ?? '').trim();
+    if (!val) continue;
+    const label = (header[c] ?? '').trim() || `Column ${c + 1}`;
+    pairs.push(`${label}: ${val}`);
+  }
+  return pairs.length ? `[${n}] ${pairs.join(' | ')}` : null;
+}
+
+/** Runs an async mapper over items with bounded concurrency. */
+async function runPooled<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = [];
+  for (let i = 0; i < items.length; i += limit) {
+    const batch = items.slice(i, i + limit);
+    out.push(...(await Promise.all(batch.map(fn))));
+  }
+  return out;
+}
+
+/**
+ * Extracts one project card PER ROW from a tracker sheet. The grid is split into
+ * labeled per-row records and processed in parallel chunks, so a 70-row sheet
+ * reliably yields ~70 cards instead of one collapsed blob.
+ */
+export async function extractProjectsFromSheet(sourceName: string, values: string[][]): Promise<ExtractedProject[]> {
+  const fallback: ExtractedProject = {
+    name: sourceName,
+    summary: `Project from ${sourceName}.`,
+    priority: 'med',
+    status: 'In progress',
+    deadline: null,
+    fields: [{ label: 'Source', value: sourceName }],
+    tasks: [],
+    stages: ['Planning', 'In progress', 'Review', 'Done'],
+    currentStage: 1,
+  };
+
+  const nonEmpty = values.filter((r) => r.some((c) => c.trim()));
+  if (!hasAnthropic || nonEmpty.length === 0) return [fallback];
+
+  const { headerIdx, header } = pickHeader(values);
+  const dataRows = values
+    .slice(headerIdx + 1)
+    .filter((r) => r.some((c) => c.trim()))
+    .slice(0, MAX_SHEET_DATA_ROWS);
+
+  // No tabular data rows — fall back to whole-sheet text extraction.
+  if (dataRows.length === 0) {
+    return extractProjects('sheet', sourceName, nonEmpty.map((r) => r.join(' | ')).join('\n'));
+  }
+
+  const headerLine = header.map((h, i) => h.trim() || `Column ${i + 1}`).join(' | ');
+
+  // Build labeled-record chunks.
+  const chunks: string[] = [];
+  for (let i = 0; i < dataRows.length; i += SHEET_ROW_CHUNK) {
+    const recs: string[] = [];
+    dataRows.slice(i, i + SHEET_ROW_CHUNK).forEach((row, j) => {
+      const rec = formatRecord(j + 1, header, row);
+      if (rec) recs.push(rec);
+    });
+    if (recs.length) chunks.push(recs.join('\n'));
+  }
+
+  const perChunk = await runPooled(chunks, CHUNK_CONCURRENCY, async (records) => {
+    try {
+      const result = await extractWithTool<{ projects?: unknown[] }>({
+        system: systemBlocks(
+          `You are IRIS, an executive chief-of-staff, building project cards from a tracker sheet named "${sourceName}". ` +
+            `The sheet columns are: ${headerLine}. ` +
+            `Below are numbered records — EACH record is one row of the sheet and represents ONE project. ` +
+            `Call record_projects exactly once and emit ONE project per record that is a real project. ` +
+            `SKIP a record only if it is empty, a repeated header, or a section/subtotal/total row — otherwise always include it. ` +
+            `Use the project-name column for the name; write a tight 1–2 sentence executive summary from the row; ` +
+            `infer a sensible priority and status from the status/importance columns; put the 3–5 most useful columns as fields; ` +
+            `set a deadline from any ETA/timeline column (YYYY-MM-DD, else empty); and add concrete next tasks the row implies.`,
+        ),
+        messages: [{ role: 'user', content: records }],
+        tool: EXTRACT_TOOL,
+        maxTokens: 8000,
+      });
+      const raw = Array.isArray(result?.projects) ? result!.projects : [];
+      return raw
+        .filter((p): p is Record<string, unknown> => !!p && typeof p === 'object')
+        .map((p) => normalizeProject(p, sourceName, ''));
+    } catch (err) {
+      logger.warn({ err, sourceName }, 'sheet chunk extraction failed — skipping chunk');
+      return [] as ExtractedProject[];
+    }
+  });
+
+  const projects = perChunk.flat().slice(0, MAX_PROJECTS_PER_SOURCE);
+  return projects.length ? projects : [fallback];
 }
 
 /** Writes a short AI summary for a manually-created project. */

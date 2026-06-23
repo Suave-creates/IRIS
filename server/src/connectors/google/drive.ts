@@ -19,29 +19,143 @@ interface DriveListResp {
   files?: DriveFile[];
 }
 
-const MAX_CONTENT = 8_000;
+// Generous cap so multi-project trackers (one row per project) aren't truncated
+// before the AI sees every row.
+const MAX_CONTENT = 24_000;
+
+/** Builds a Drive files.list URL with every param URL-encoded (survives proxies). */
+function driveListUrl(params: Record<string, string>): string {
+  const qs = new URLSearchParams(params).toString();
+  return `https://www.googleapis.com/drive/v3/files?${qs}`;
+}
 
 /** Lists real Drive items of a given type for the user to pick as a project source. */
 export async function listDriveSources(tenantId: string, type: SourceType): Promise<AvailableSource[]> {
-  const q = encodeURIComponent(`mimeType='${MIME[type]}' and trashed=false`);
   const data = await googleClient.get<DriveListResp>(
     tenantId,
-    `https://www.googleapis.com/drive/v3/files?pageSize=25&orderBy=modifiedTime%20desc&q=${q}&fields=files(id,name,mimeType,webViewLink)`,
+    driveListUrl({
+      pageSize: '50',
+      orderBy: 'modifiedTime desc',
+      q: `mimeType='${MIME[type]}' and trashed=false`,
+      fields: 'files(id,name,mimeType,webViewLink)',
+      supportsAllDrives: 'true',
+      includeItemsFromAllDrives: 'true',
+      corpora: 'allDrives',
+    }),
   );
   return (data.files ?? []).map((f) => ({
     externalId: f.id,
-    name: f.name,
+    name: f.name?.trim() || 'Untitled',
     type,
     webLink: f.webViewLink ?? null,
   }));
 }
 
+/**
+ * Patterns that extract a Drive/Docs/Sheets file ID from a pasted URL.
+ * The optional `(?:u/N/)?` segment covers account-scoped links copied from the
+ * browser address bar when signed into multiple Google accounts
+ * (e.g. docs.google.com/spreadsheets/u/0/d/<id>/edit).
+ */
+const REF_PATTERNS = [
+  /\/spreadsheets\/(?:u\/\d+\/)?d\/([A-Za-z0-9_-]+)/,
+  /\/document\/(?:u\/\d+\/)?d\/([A-Za-z0-9_-]+)/,
+  /\/presentation\/(?:u\/\d+\/)?d\/([A-Za-z0-9_-]+)/,
+  /\/file\/(?:u\/\d+\/)?d\/([A-Za-z0-9_-]+)/,
+  /\/folders\/([A-Za-z0-9_-]+)/,
+  /[?&]id=([A-Za-z0-9_-]+)/,
+];
+
+/** Extracts a Drive file/folder ID from a pasted URL, or returns a bare ID as-is. */
+export function parseDriveRef(ref: string): string | null {
+  const s = ref.trim();
+  if (!s) return null;
+  for (const p of REF_PATTERNS) {
+    const m = s.match(p);
+    if (m?.[1]) return m[1];
+  }
+  // Bare ID (Drive IDs are long base64url-ish strings).
+  if (/^[A-Za-z0-9_-]{15,}$/.test(s)) return s;
+  return null;
+}
+
+const DEFAULT_LINK: Record<SourceType, (id: string) => string> = {
+  sheet: (id) => `https://docs.google.com/spreadsheets/d/${id}/edit`,
+  doc: (id) => `https://docs.google.com/document/d/${id}/edit`,
+  folder: (id) => `https://drive.google.com/drive/folders/${id}`,
+};
+
+/**
+ * Resolves a single Drive item's real title from its ID (best effort).
+ * Uses the per-file metadata endpoint (more reliable than list behind proxies);
+ * falls back to the Sheets API title, then to a typed placeholder name.
+ */
+export async function resolveDriveItem(
+  tenantId: string,
+  type: SourceType,
+  externalId: string,
+): Promise<AvailableSource> {
+  const fallback: AvailableSource = {
+    externalId,
+    name: `Untitled ${type}`,
+    type,
+    webLink: DEFAULT_LINK[type](externalId),
+  };
+
+  try {
+    const qs = new URLSearchParams({
+      fields: 'id,name,mimeType,webViewLink',
+      supportsAllDrives: 'true',
+    }).toString();
+    const f = await googleClient.get<DriveFile>(
+      tenantId,
+      `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(externalId)}?${qs}`,
+    );
+    const name = f.name?.trim();
+    if (name) return { externalId: f.id || externalId, name, type, webLink: f.webViewLink ?? fallback.webLink };
+  } catch {
+    /* fall through to type-specific fallback */
+  }
+
+  if (type === 'sheet') {
+    try {
+      const qs = new URLSearchParams({ fields: 'properties.title', includeGridData: 'false' }).toString();
+      const s = await googleClient.get<{ properties?: { title?: string } }>(
+        tenantId,
+        `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(externalId)}?${qs}`,
+      );
+      const title = s.properties?.title?.trim();
+      if (title) return { externalId, name: title, type, webLink: fallback.webLink };
+    } catch {
+      /* fall through */
+    }
+  }
+
+  return fallback;
+}
+
+/**
+ * Reads a sheet's raw cell grid (row-major) for structured, per-row extraction.
+ * Returns a 2-D array of trimmed strings; trailing empty cells/rows are omitted by the API.
+ */
+export async function readSheetValues(tenantId: string, externalId: string): Promise<string[][]> {
+  const idEnc = encodeURIComponent(externalId);
+  const data = await googleClient.get<{ values?: unknown[][] }>(
+    tenantId,
+    `https://sheets.googleapis.com/v4/spreadsheets/${idEnc}/values/A1:AZ500`,
+  );
+  return (data.values ?? []).map((row) => row.map((c) => (c == null ? '' : String(c))));
+}
+
 /** Reads the text content of a linked source (doc export / sheet values / folder listing). */
 export async function readSourceContent(tenantId: string, type: SourceType, externalId: string): Promise<string> {
+  // IDs are interpolated into authenticated Google URLs — always encode.
+  const idEnc = encodeURIComponent(externalId);
+
   if (type === 'doc') {
     const text = await googleClient.getText(
       tenantId,
-      `https://www.googleapis.com/drive/v3/files/${externalId}/export?mimeType=text/plain`,
+      `https://www.googleapis.com/drive/v3/files/${idEnc}/export?mimeType=text/plain`,
     );
     return text.slice(0, MAX_CONTENT);
   }
@@ -49,17 +163,25 @@ export async function readSourceContent(tenantId: string, type: SourceType, exte
   if (type === 'sheet') {
     const data = await googleClient.get<{ values?: string[][] }>(
       tenantId,
-      `https://sheets.googleapis.com/v4/spreadsheets/${externalId}/values/A1:Z80`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${idEnc}/values/A1:Z200`,
     );
     const rows = (data.values ?? []).map((r) => r.join(' | '));
     return rows.join('\n').slice(0, MAX_CONTENT);
   }
 
   // folder → list children, read a couple of docs/sheets, concatenate.
-  const q = encodeURIComponent(`'${externalId}' in parents and trashed=false`);
+  // externalId is charset-constrained at the validation boundary, so the
+  // single-quoted `q` predicate cannot be broken out of.
   const listing = await googleClient.get<DriveListResp>(
     tenantId,
-    `https://www.googleapis.com/drive/v3/files?pageSize=25&q=${q}&fields=files(id,name,mimeType)`,
+    driveListUrl({
+      pageSize: '25',
+      q: `'${externalId}' in parents and trashed=false`,
+      fields: 'files(id,name,mimeType)',
+      supportsAllDrives: 'true',
+      includeItemsFromAllDrives: 'true',
+      corpora: 'allDrives',
+    }),
   );
   const files = listing.files ?? [];
   const names = files.map((f) => `- ${f.name}`).join('\n');
@@ -69,8 +191,13 @@ export async function readSourceContent(tenantId: string, type: SourceType, exte
     .slice(0, 2);
   for (const f of readable) {
     const t: SourceType = f.mimeType === MIME.doc ? 'doc' : 'sheet';
-    const text = await readSourceContent(tenantId, t, f.id);
-    body += `\n--- ${f.name} ---\n${text.slice(0, 3000)}\n`;
+    try {
+      const text = await readSourceContent(tenantId, t, f.id);
+      body += `\n--- ${f.name} ---\n${text.slice(0, 3000)}\n`;
+    } catch {
+      // One inaccessible child shouldn't fail the whole folder scan.
+      body += `\n--- ${f.name} (could not read) ---\n`;
+    }
     if (body.length > MAX_CONTENT) break;
   }
   return body.slice(0, MAX_CONTENT);

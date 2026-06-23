@@ -556,53 +556,56 @@ export const projectsRepo = {
     return r.affectedRows > 0;
   },
 
-  /** Creates (or refreshes) a project distilled by AI from a linked source. */
-  async createFromExtraction(
+  /** Creates (or refreshes) all projects distilled by AI from a single linked source. */
+  async createFromExtractions(
     tenantId: string,
     source: { type: ProjectSourceType; name: string; externalId: string },
-    ex: {
+    list: {
       name: string; summary: string; priority: Priority; deadline: string | null; status: string;
       fields: { label: string; value: string }[]; tasks: { title: string }[]; stages: string[]; currentStage: number;
-    },
+    }[],
   ): Promise<void> {
-    const stages = ex.stages.length ? ex.stages : DEFAULT_STAGES;
-    const currentStage = Math.max(0, Math.min(ex.currentStage, stages.length - 1));
-    const progress = Math.round(((currentStage + 1) / stages.length) * 100);
     await withTransaction(async (conn) => {
-      // Refresh: drop any prior project from this source (children cascade).
+      // Refresh: drop every prior project from this source (children cascade), then re-insert the full set.
       await conn.execute('DELETE FROM projects WHERE tenant_id = :tid AND source_ref = :ref', {
         tid: tenantId, ref: source.externalId,
       } as never);
-      const projectId = id('proj');
-      await conn.execute(
-        `INSERT INTO projects
-           (id, tenant_id, name, source, priority, status, deadline, progress, owner, auto, summary, source_detail, source_ref, stages, current_stage)
-         VALUES
-           (:id, :tid, :name, :source, :priority, :status, :deadline, :progress, 'IRIS', 1, :summary, :detail, :ref, :stages, :stage)`,
-        {
-          id: projectId, tid: tenantId, name: ex.name.slice(0, 200), source: source.type, priority: ex.priority,
-          status: ex.status.slice(0, 40), deadline: ex.deadline, progress, summary: ex.summary,
-          detail: `${source.type} · ${source.name}`, ref: source.externalId,
-          stages: JSON.stringify(stages), stage: currentStage,
-        } as never,
-      );
-      for (let i = 0; i < ex.fields.length; i++) {
-        const f = ex.fields[i]!;
+
+      for (const ex of list) {
+        const stages = ex.stages.length ? ex.stages : DEFAULT_STAGES;
+        const currentStage = Math.max(0, Math.min(ex.currentStage, stages.length - 1));
+        const progress = Math.round(((currentStage + 1) / stages.length) * 100);
+        const projectId = id('proj');
         await conn.execute(
-          `INSERT INTO project_fields (id, project_id, label, value, position) VALUES (:id, :pid, :label, :value, :pos)`,
-          { id: id('pfld'), pid: projectId, label: f.label, value: f.value, pos: i } as never,
+          `INSERT INTO projects
+             (id, tenant_id, name, source, priority, status, deadline, progress, owner, auto, summary, source_detail, source_ref, stages, current_stage)
+           VALUES
+             (:id, :tid, :name, :source, :priority, :status, :deadline, :progress, 'IRIS', 1, :summary, :detail, :ref, :stages, :stage)`,
+          {
+            id: projectId, tid: tenantId, name: ex.name.slice(0, 200), source: source.type, priority: ex.priority,
+            status: ex.status.slice(0, 40), deadline: ex.deadline, progress, summary: ex.summary,
+            detail: `${source.type} · ${source.name}`, ref: source.externalId,
+            stages: JSON.stringify(stages), stage: currentStage,
+          } as never,
+        );
+        for (let i = 0; i < ex.fields.length; i++) {
+          const f = ex.fields[i]!;
+          await conn.execute(
+            `INSERT INTO project_fields (id, project_id, label, value, position) VALUES (:id, :pid, :label, :value, :pos)`,
+            { id: id('pfld'), pid: projectId, label: f.label, value: f.value, pos: i } as never,
+          );
+        }
+        for (let i = 0; i < ex.tasks.length; i++) {
+          await conn.execute(
+            `INSERT INTO project_tasks (id, project_id, title, done, position) VALUES (:id, :pid, :title, 0, :pos)`,
+            { id: id('ptsk'), pid: projectId, title: ex.tasks[i]!.title, pos: i } as never,
+          );
+        }
+        await conn.execute(
+          `INSERT INTO project_activity (id, project_id, who, act) VALUES (:id, :pid, 'IRIS', :act)`,
+          { id: id('pact'), pid: projectId, act: `extracted this project from ${source.name}` } as never,
         );
       }
-      for (let i = 0; i < ex.tasks.length; i++) {
-        await conn.execute(
-          `INSERT INTO project_tasks (id, project_id, title, done, position) VALUES (:id, :pid, :title, 0, :pos)`,
-          { id: id('ptsk'), pid: projectId, title: ex.tasks[i]!.title, pos: i } as never,
-        );
-      }
-      await conn.execute(
-        `INSERT INTO project_activity (id, project_id, who, act) VALUES (:id, :pid, 'IRIS', :act)`,
-        { id: id('pact'), pid: projectId, act: `extracted this project from ${source.name}` } as never,
-      );
     });
   },
 

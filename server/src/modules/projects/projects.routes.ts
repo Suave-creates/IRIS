@@ -4,9 +4,15 @@ import { currentUser, requireAuth } from '../auth/guards.js';
 import { Errors } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import { googleClient } from '../../connectors/google/client.js';
-import { listDriveSources, readSourceContent } from '../../connectors/google/drive.js';
+import {
+  listDriveSources,
+  parseDriveRef,
+  readSheetValues,
+  readSourceContent,
+  resolveDriveItem,
+} from '../../connectors/google/drive.js';
 import { projectsRepo } from './projects.repo.js';
-import { extractProject, summarizeManual } from './projects.ai.js';
+import { extractProjects, extractProjectsFromSheet, summarizeManual } from './projects.ai.js';
 
 const createProjectSchema = z.object({
   name: z.string().trim().min(1).max(200),
@@ -17,9 +23,15 @@ const createProjectSchema = z.object({
 
 const linkSourceSchema = z.object({
   type: z.enum(['folder', 'sheet', 'doc']),
-  externalId: z.string().trim().min(1).max(255),
+  // Drive/Docs/Sheets IDs are base64url — constrain so it can't inject into upstream URLs.
+  externalId: z.string().trim().regex(/^[A-Za-z0-9_-]+$/, 'Invalid Drive ID.').min(1).max(255),
   name: z.string().trim().min(1).max(200),
   webLink: z.string().trim().max(512).nullish(),
+});
+
+const linkByRefSchema = z.object({
+  type: z.enum(['folder', 'sheet', 'doc']),
+  ref: z.string().trim().min(1).max(1024),
 });
 
 const updateProjectSchema = z.object({
@@ -58,7 +70,9 @@ export async function projectsRoutes(app: FastifyInstance): Promise<void> {
     if (!(await googleClient.isConnected(me.tenantId))) {
       throw Errors.upstream('Google is not connected.', 'Connect Google on the Connectors page to link real sources.');
     }
-    return { data: await listDriveSources(me.tenantId, type) };
+    const items = await listDriveSources(me.tenantId, type);
+    logger.info({ type, count: items.length, sample: items[0]?.name }, 'drive sources listed');
+    return { data: items };
   });
 
   // Link a real connector item as a source.
@@ -66,6 +80,30 @@ export async function projectsRoutes(app: FastifyInstance): Promise<void> {
     const me = currentUser(req);
     const body = linkSourceSchema.parse(req.body);
     return { data: await projectsRepo.createSourceLinked(me.tenantId, body) };
+  });
+
+  // Link by pasted URL or ID — resolves the real title even when listing is blocked.
+  app.post('/sources/by-ref', async (req) => {
+    const me = currentUser(req);
+    const { type, ref } = linkByRefSchema.parse(req.body);
+    if (!(await googleClient.isConnected(me.tenantId))) {
+      throw Errors.upstream('Google is not connected.', 'Connect Google on the Connectors page to link real sources.');
+    }
+    const externalId = parseDriveRef(ref);
+    if (!externalId) {
+      throw Errors.validation(
+        'Could not find a Google Drive ID in that link. Paste a full Google Sheets/Docs/Drive URL or the file ID.',
+      );
+    }
+    const resolved = await resolveDriveItem(me.tenantId, type, externalId);
+    const source = await projectsRepo.createSourceLinked(me.tenantId, {
+      type,
+      externalId: resolved.externalId,
+      name: resolved.name,
+      webLink: resolved.webLink,
+    });
+    logger.info({ type, externalId: resolved.externalId, name: resolved.name }, 'source linked by ref');
+    return { data: source };
   });
 
   app.delete('/sources/:id', async (req) => {
@@ -76,7 +114,7 @@ export async function projectsRoutes(app: FastifyInstance): Promise<void> {
     return { data: { ok: true } };
   });
 
-  // ── AI fetch: read each linked source, distill ONE clean project (noise-filtered) ──
+  // ── AI fetch: read each linked source, distill every clean project (noise-filtered) ──
   app.post('/fetch', async (req) => {
     const me = currentUser(req);
     if (!(await googleClient.isConnected(me.tenantId))) {
@@ -86,13 +124,16 @@ export async function projectsRoutes(app: FastifyInstance): Promise<void> {
     for (const s of sources) {
       await projectsRepo.setSourceStatus(me.tenantId, s.id, 'scanning');
       try {
-        const content = await readSourceContent(me.tenantId, s.type, s.external_id!);
-        const extracted = await extractProject(s.type, s.name, content);
-        await projectsRepo.createFromExtraction(
+        const extracted =
+          s.type === 'sheet'
+            ? await extractProjectsFromSheet(s.name, await readSheetValues(me.tenantId, s.external_id!))
+            : await extractProjects(s.type, s.name, await readSourceContent(me.tenantId, s.type, s.external_id!));
+        await projectsRepo.createFromExtractions(
           me.tenantId,
           { type: s.type, name: s.name, externalId: s.external_id! },
           extracted,
         );
+        logger.info({ source: s.name, projects: extracted.length }, 'source scanned into projects');
         await projectsRepo.setSourceStatus(me.tenantId, s.id, 'scanned');
       } catch (err) {
         logger.warn({ err, source: s.name }, 'project fetch failed for source');
