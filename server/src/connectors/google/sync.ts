@@ -12,8 +12,8 @@ const ymd = (d: Date) => `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pa
 const dt = (d: Date) =>
   `${ymd(d)} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
 
-/** Lightweight category heuristic until the Mail-AI classifier runs. */
-function categorize(text: string): string {
+/** Lightweight category heuristic; the fallback when AI triage is unavailable. */
+export function categorize(text: string): string {
   const t = text.toLowerCase();
   if (/(approve|approval|sign[- ]?off|review needed)/.test(t)) return 'approvals';
   if (/(deadline|due|filing|expires)/.test(t)) return 'deadlines';
@@ -38,7 +38,7 @@ function displayName(from: string): string {
 interface GmailList {
   messages?: { id: string }[];
 }
-interface GmailPayload {
+export interface GmailPayload {
   mimeType?: string;
   headers?: { name: string; value: string }[];
   body?: { data?: string };
@@ -79,7 +79,7 @@ function findPart(payload: GmailPayload, mime: string): GmailPayload | null {
   return null;
 }
 /** Best-effort plain-text body: prefer text/plain, else stripped text/html, else top-level body. */
-function extractPlainText(payload?: GmailPayload): string {
+export function extractPlainText(payload?: GmailPayload): string {
   if (!payload) return '';
   const plain = findPart(payload, 'text/plain');
   if (plain) return decodeB64Url(plain.body?.data);

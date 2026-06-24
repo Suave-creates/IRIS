@@ -2,6 +2,7 @@ import type { RowDataPacket } from 'mysql2/promise';
 import type { CalendarEvent } from '@iris/shared';
 import { execute, query } from '../../db/pool.js';
 import { id } from '../../lib/ids.js';
+import { mysqlUtcToIso } from '../../lib/datetime.js';
 
 /** Row shape for `calendar_events`. DATETIME/TIMESTAMP come back as strings (dateStrings). */
 export interface CalendarEventRow extends RowDataPacket {
@@ -21,24 +22,13 @@ export interface CalendarEventRow extends RowDataPacket {
   updated_at: string;
 }
 
-/**
- * The DB stores UTC wall-clock and returns "YYYY-MM-DD HH:MM:SS" (dateStrings: true).
- * Browsers parse that ambiguously (often as local time, or fail outright), which made
- * events collapse to the grid's start hour. Normalize to unambiguous ISO-8601 Z.
- */
-function toIso(dt: string): string {
-  if (!dt) return dt;
-  const d = new Date(/[TZ]/.test(dt) ? dt : `${dt.replace(' ', 'T')}Z`);
-  return Number.isNaN(d.getTime()) ? dt : d.toISOString();
-}
-
 /** Maps a DB row (snake_case) to the CalendarEvent DTO (camelCase). */
 export function toCalendarEvent(row: CalendarEventRow): CalendarEvent {
   return {
     id: row.id,
     title: row.title,
-    startAt: toIso(row.start_at),
-    endAt: toIso(row.end_at),
+    startAt: mysqlUtcToIso(row.start_at),
+    endAt: mysqlUtcToIso(row.end_at),
     color: row.color,
     location: row.location ?? null,
     notes: row.notes ?? null,

@@ -48,7 +48,7 @@ const TRIAGE_TOOL: Anthropic.Tool = {
   },
 };
 
-function normalizeTriage(raw: unknown): Triage | null {
+export function normalizeTriage(raw: unknown): Triage | null {
   if (!raw || typeof raw !== 'object') return null;
   const r = raw as Record<string, unknown>;
   const summary = typeof r.summary === 'string' ? r.summary.trim() : '';
@@ -59,6 +59,21 @@ function normalizeTriage(raw: unknown): Triage | null {
     ? r.tags.filter((t): t is string => typeof t === 'string').map((t) => t.trim().slice(0, 40)).filter(Boolean).slice(0, 3)
     : [];
   return { summary: summary.slice(0, 1000), category, priority, tags };
+}
+
+/**
+ * Maps raw tool-emitted triage entries back to the input order by their `index`, so a
+ * dropped or reordered entry can never misattribute a summary to the wrong email.
+ * Returns a parallel array of length `count` (null where nothing usable was returned).
+ */
+export function mapTriageResults(raw: unknown[], count: number): (Triage | null)[] {
+  const byIndex = new Map<number, Triage>();
+  for (const entry of raw) {
+    const idx = entry && typeof entry === 'object' ? Number((entry as Record<string, unknown>).index) : NaN;
+    const triage = normalizeTriage(entry);
+    if (Number.isInteger(idx) && triage && !byIndex.has(idx)) byIndex.set(idx, triage);
+  }
+  return Array.from({ length: count }, (_, i) => byIndex.get(i + 1) ?? null);
 }
 
 /**
@@ -90,13 +105,7 @@ export async function triageEmails(emails: TriageInput[]): Promise<(Triage | nul
 
     // Map by the model-provided index so a dropped/reordered entry can't misattribute a summary.
     const arr = Array.isArray(result?.emails) ? result!.emails : [];
-    const byIndex = new Map<number, Triage>();
-    for (const raw of arr) {
-      const idx = raw && typeof raw === 'object' ? Number((raw as Record<string, unknown>).index) : NaN;
-      const triage = normalizeTriage(raw);
-      if (Number.isInteger(idx) && triage && !byIndex.has(idx)) byIndex.set(idx, triage);
-    }
-    return emails.map((_, i) => byIndex.get(i + 1) ?? null);
+    return mapTriageResults(arr, emails.length);
   } catch (err) {
     logger.warn({ err, count: emails.length }, 'mail triage failed — falling back to heuristic');
     return emails.map(() => null);

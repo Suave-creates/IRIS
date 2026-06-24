@@ -162,7 +162,7 @@ export async function extractProjects(
 // ── Structured sheet extraction (one card per row, chunked + parallel) ──────────
 
 /** Picks the most label-dense row among the first few as the header. */
-function pickHeader(values: string[][]): { headerIdx: number; header: string[] } {
+export function pickHeader(values: string[][]): { headerIdx: number; header: string[] } {
   let bestIdx = 0;
   let bestCount = -1;
   const limit = Math.min(values.length, 6);
@@ -177,7 +177,7 @@ function pickHeader(values: string[][]): { headerIdx: number; header: string[] }
 }
 
 /** Renders one sheet row as a labeled, unambiguous record; null if the row is empty. */
-function formatRecord(n: number, header: string[], row: string[]): string | null {
+export function formatRecord(n: number, header: string[], row: string[]): string | null {
   const cols = Math.max(header.length, row.length);
   const pairs: string[] = [];
   for (let c = 0; c < cols; c++) {

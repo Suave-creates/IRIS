@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { CalendarEvent } from '@iris/shared';
 import { Errors } from '../../lib/errors.js';
+import { isoToMysqlUtc } from '../../lib/datetime.js';
 import { googleClient } from '../../connectors/google/client.js';
 import {
   createCalendarEvent,
@@ -45,9 +46,7 @@ const rangeQuerySchema = z.object({
 const idParamSchema = z.object({ id: z.string().min(1).max(40) });
 
 /** Converts an ISO instant to a UTC `YYYY-MM-DD HH:MM:SS` string for MySQL DATETIME (pool tz is 'Z'). */
-function toMysqlDateTime(iso: string): string {
-  return new Date(iso).toISOString().slice(0, 19).replace('T', ' ');
-}
+const toMysqlDateTime = isoToMysqlUtc;
 
 /** Default window: Monday 00:00 → next Monday 00:00 (UTC) covering the current week. */
 function currentWeekRange(): { from: string; to: string } {
