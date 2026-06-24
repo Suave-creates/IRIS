@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query';
 import type { LensGather } from '@iris/shared';
 import { Card, Spinner } from '@/components/primitives';
 import { ArrowUpRight, Search, Sparkle } from '@/components/icons';
+import { Markdown } from '@/components/Markdown';
 import { ApiError } from '@/lib/api';
 import { lensApi } from '@/features/lens/api';
 import styles from './Lens.module.css';
@@ -94,7 +95,7 @@ export function Lens() {
               <div className={styles.summaryHead}>
                 <Sparkle size={15} /> IRIS synthesis
               </div>
-              <div className={styles.summaryBody}>{result.summary}</div>
+              <Markdown className={styles.summaryBody}>{result.summary}</Markdown>
             </Card>
           )}
 

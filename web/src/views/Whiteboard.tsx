@@ -27,6 +27,7 @@ export function Whiteboard() {
   const sources = useProjectSources();
 
   const [drag, setDrag] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [resize, setResize] = useState<{ id: string; w: number; h: number } | null>(null);
   const [refOpen, setRefOpen] = useState(false);
   const [refKind, setRefKind] = useState<FileKind>('sheet');
   const [refInput, setRefInput] = useState('');
@@ -80,6 +81,40 @@ export function Whiteboard() {
     window.addEventListener('mousemove', move);
     window.addEventListener('mouseup', up);
     // Lets the unmount effect tear down a drag still in progress.
+    dragCleanup.current = detach;
+  };
+
+  // ── Resize (bottom-right handle; persist once on drop) ─────────────────────
+  const startResize = (item: WhiteboardItem, e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const start = { x: e.clientX, y: e.clientY };
+    let w = item.w;
+    let h = item.h;
+    let moved = false;
+    setResize({ id: item.id, w, h });
+    const move = (ev: MouseEvent) => {
+      w = Math.max(160, item.w + (ev.clientX - start.x));
+      h = Math.max(120, item.h + (ev.clientY - start.y));
+      moved = true;
+      setResize({ id: item.id, w, h });
+    };
+    const detach = () => {
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+      dragCleanup.current = null;
+    };
+    const up = () => {
+      detach();
+      if (moved) {
+        m.update.mutate({ id: item.id, patch: { w, h } }, { onSettled: () => setResize(null) });
+      } else {
+        setResize(null);
+      }
+    };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
     dragCleanup.current = detach;
   };
 
@@ -237,15 +272,16 @@ export function Whiteboard() {
           ) : (
             items.map((item) => {
               const pos = drag?.id === item.id ? drag : { x: item.x, y: item.y };
+              const sizing = resize?.id === item.id ? resize : { w: item.w, h: item.h };
               const meta = KIND_META[item.kind];
-              const dragging = drag?.id === item.id;
+              const active = drag?.id === item.id || resize?.id === item.id;
               return (
                 <div
                   key={item.id}
                   className={styles.window}
                   data-ai={item.aiIncluded}
-                  data-dragging={dragging}
-                  style={{ left: pos.x, top: pos.y, width: item.w, height: item.h, zIndex: dragging ? 9999 : item.z }}
+                  data-dragging={active}
+                  style={{ left: pos.x, top: pos.y, width: sizing.w, height: sizing.h, zIndex: active ? 9999 : item.z }}
                 >
                   <div className={styles.winHead} onMouseDown={(e) => startDrag(item, e)}>
                     <span className={styles.winIcon} style={{ background: meta.bg, color: meta.color }}>
@@ -292,6 +328,12 @@ export function Whiteboard() {
                       </div>
                     )}
                   </div>
+                  <div
+                    className={styles.resizeHandle}
+                    onMouseDown={(e) => startResize(item, e)}
+                    aria-hidden
+                    title="Drag to resize"
+                  />
                 </div>
               );
             })

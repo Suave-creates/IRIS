@@ -1,4 +1,5 @@
 import { googleClient } from './client.js';
+import { logger } from '../../lib/logger.js';
 
 export interface GoogleEventInput {
   title: string;
@@ -136,13 +137,19 @@ export async function searchPeople(tenantId: string, query: string): Promise<Per
   const readMask = encodeURIComponent('names,emailAddresses');
   const enc = encodeURIComponent(q);
 
+  const onErr = (source: string) => (err: unknown) => {
+    // Surfaced (not swallowed) so an unenabled People API / missing scope is diagnosable.
+    logger.warn({ err: err instanceof Error ? err.message : String(err), source }, 'people search failed');
+    return [] as PersonSuggestion[];
+  };
+
   const directory = googleClient
     .get<PeopleResult>(
       tenantId,
       `https://people.googleapis.com/v1/people:searchDirectoryPeople?query=${enc}&readMask=${readMask}&sources=DIRECTORY_SOURCE_TYPE_DOMAIN_PROFILE&pageSize=10`,
     )
     .then(mapPeople)
-    .catch(() => [] as PersonSuggestion[]);
+    .catch(onErr('directory'));
 
   const contacts = googleClient
     .get<PeopleResult>(
@@ -150,7 +157,7 @@ export async function searchPeople(tenantId: string, query: string): Promise<Per
       `https://people.googleapis.com/v1/people:searchContacts?query=${enc}&readMask=${readMask}&pageSize=10`,
     )
     .then(mapPeople)
-    .catch(() => [] as PersonSuggestion[]);
+    .catch(onErr('contacts'));
 
   const [dir, con] = await Promise.all([directory, contacts]);
   const seen = new Set<string>();
