@@ -27,9 +27,13 @@ function cachedBlock(text: string): Anthropic.TextBlockParam {
   return block;
 }
 
+/** Standing style rule appended to every persona so all AI output stays clean. */
+const STYLE_RULE =
+  ' Never use emojis or decorative symbols in your output; keep the tone professional, precise, and restrained.';
+
 /** A system prompt rendered as cacheable blocks: a stable persona + a volatile context block. */
 export function systemBlocks(persona: string, context?: string): Anthropic.TextBlockParam[] {
-  const blocks: Anthropic.TextBlockParam[] = [cachedBlock(persona)];
+  const blocks: Anthropic.TextBlockParam[] = [cachedBlock(persona + STYLE_RULE)];
   if (context) blocks.push({ type: 'text', text: context });
   return blocks;
 }
