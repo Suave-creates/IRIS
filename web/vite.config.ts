@@ -10,6 +10,10 @@ export default defineConfig({
     },
   },
   server: {
+    // Listen on all interfaces so the dev app is reachable from other LAN devices
+    // (e.g. http://<your-lan-ip>:5173). The /api proxy still reaches the backend
+    // on localhost, so the browser sees a single origin and CORS is a non-issue.
+    host: true,
     port: 5173,
     proxy: {
       // Proxy API + SSE to the backend so the browser sees a single origin in dev.
