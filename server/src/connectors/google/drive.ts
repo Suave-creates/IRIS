@@ -1,5 +1,13 @@
+import * as XLSX from 'xlsx';
 import type { AvailableSource } from '@iris/shared';
 import { googleClient } from './client.js';
+
+/** Uploaded-Excel MIME types (NOT Google Sheets) — read by downloading + parsing bytes. */
+export const XLSX_MIMES = new Set([
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+  'application/vnd.ms-excel', // .xls
+]);
+export const isXlsxMime = (mime: string | null | undefined): boolean => !!mime && XLSX_MIMES.has(mime);
 
 type SourceType = 'folder' | 'sheet' | 'doc';
 
@@ -192,6 +200,42 @@ export async function readSheetText(tenantId: string, externalId: string, maxCha
   return text.slice(0, maxChars);
 }
 
+/** The MIME type of a Drive file (used to route Google-Sheet vs uploaded-Excel reads). */
+export async function getMimeType(tenantId: string, externalId: string): Promise<string | null> {
+  const qs = new URLSearchParams({ fields: 'mimeType', supportsAllDrives: 'true' }).toString();
+  const f = await googleClient.get<{ mimeType?: string }>(
+    tenantId,
+    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(externalId)}?${qs}`,
+  );
+  return f.mimeType ?? null;
+}
+
+/** Reads EVERY worksheet of an uploaded .xlsx/.xls by downloading the bytes and parsing them. */
+export async function readXlsxTabs(tenantId: string, externalId: string): Promise<SheetTab[]> {
+  const buf = await googleClient.getBuffer(
+    tenantId,
+    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(externalId)}?alt=media&supportsAllDrives=true`,
+  );
+  const wb = XLSX.read(buf, { type: 'buffer' });
+  return wb.SheetNames.slice(0, MAX_TABS).map((name) => {
+    const ws = wb.Sheets[name];
+    const rows = ws ? XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, blankrows: false, defval: '' }) : [];
+    return {
+      title: name,
+      values: rows.map((r) => (Array.isArray(r) ? r.map((c) => (c == null ? '' : String(c))) : [])),
+    };
+  });
+}
+
+/** Flattens an uploaded Excel workbook into labeled text (all sheets), for AI context. */
+export async function readXlsxText(tenantId: string, externalId: string, maxChars = 50_000): Promise<string> {
+  const tabs = await readXlsxTabs(tenantId, externalId);
+  return tabs
+    .map((t) => `## Tab: ${t.title}\n${t.values.map((r) => r.join(' | ')).join('\n')}`)
+    .join('\n\n')
+    .slice(0, maxChars);
+}
+
 /** Extracts the worksheet gid from a Google Sheets URL (e.g. ...#gid=1937180792). */
 export function parseDriveGid(ref: string): string | null {
   return ref.match(/[#?&]gid=([0-9]+)/)?.[1] ?? null;
@@ -273,19 +317,56 @@ export async function readSourceContent(tenantId: string, type: SourceType, exte
   const files = listing.files ?? [];
   const names = files.map((f) => `- ${f.name}`).join('\n');
   let body = `Folder contents:\n${names}\n`;
+  // Read Google Docs/Sheets AND uploaded Excel children. Larger budget than a single
+  // doc since a folder of data files (e.g. RCA workbooks) is the point of linking it.
+  const FOLDER_MAX = 48_000;
   const readable = files
-    .filter((f) => f.mimeType === MIME.doc || f.mimeType === MIME.sheet)
-    .slice(0, 2);
+    .filter((f) => f.mimeType === MIME.doc || f.mimeType === MIME.sheet || isXlsxMime(f.mimeType))
+    .slice(0, 6);
   for (const f of readable) {
-    const t: SourceType = f.mimeType === MIME.doc ? 'doc' : 'sheet';
     try {
-      const text = await readSourceContent(tenantId, t, f.id);
-      body += `\n--- ${f.name} ---\n${text.slice(0, 3000)}\n`;
+      const text = isXlsxMime(f.mimeType)
+        ? await readXlsxText(tenantId, f.id, 16_000)
+        : f.mimeType === MIME.doc
+          ? await readSourceContent(tenantId, 'doc', f.id)
+          : await readSheetText(tenantId, f.id, 16_000);
+      body += `\n--- ${f.name} ---\n${text}\n`;
     } catch {
       // One inaccessible child shouldn't fail the whole folder scan.
       body += `\n--- ${f.name} (could not read) ---\n`;
     }
-    if (body.length > MAX_CONTENT) break;
+    if (body.length > FOLDER_MAX) break;
   }
-  return body.slice(0, MAX_CONTENT);
+  return body.slice(0, FOLDER_MAX);
+}
+
+/** Reads a spreadsheet's tabs whether it's a Google Sheet or an uploaded .xlsx/.xls. */
+export async function readSpreadsheetTabs(tenantId: string, externalId: string): Promise<SheetTab[]> {
+  let mime: string | null = null;
+  try {
+    mime = await getMimeType(tenantId, externalId);
+  } catch {
+    /* default to Google Sheet path */
+  }
+  return isXlsxMime(mime) ? readXlsxTabs(tenantId, externalId) : readSheetTabs(tenantId, externalId);
+}
+
+/**
+ * Spreadsheet text for AI context, routed by type: a gid-targeted Google Sheet tab,
+ * an uploaded Excel workbook (all sheets), or a full Google Sheet (all tabs).
+ */
+export async function readSpreadsheetText(
+  tenantId: string,
+  externalId: string,
+  gid: string | null,
+  maxChars = 50_000,
+): Promise<string> {
+  if (gid) return readSheetTextForRef(tenantId, externalId, gid, maxChars);
+  let mime: string | null = null;
+  try {
+    mime = await getMimeType(tenantId, externalId);
+  } catch {
+    /* default to Google Sheet path */
+  }
+  return isXlsxMime(mime) ? readXlsxText(tenantId, externalId, maxChars) : readSheetText(tenantId, externalId, maxChars);
 }

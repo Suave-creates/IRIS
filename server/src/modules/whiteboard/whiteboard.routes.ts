@@ -8,8 +8,8 @@ import { googleClient } from '../../connectors/google/client.js';
 import {
   parseDriveGid,
   parseDriveRef,
-  readSheetTextForRef,
   readSourceContent,
+  readSpreadsheetText,
   resolveDriveItem,
 } from '../../connectors/google/drive.js';
 import { whiteboardRepo } from './whiteboard.repo.js';
@@ -68,9 +68,10 @@ async function readItemContent(tenantId: string, item: WhiteboardItem): Promise<
   if (item.kind === 'insight') return item.body ?? '';
   if (!item.externalId) return '';
   if (item.kind === 'sheet') {
-    // A "#gid=" preserved on the web link targets the exact tab the user pasted.
+    // A "#gid=" preserved on the web link targets the exact tab. Otherwise the file may
+    // be a Google Sheet OR an uploaded .xlsx — readSpreadsheetText routes by type.
     const gid = item.webLink ? parseDriveGid(item.webLink) : null;
-    return readSheetTextForRef(tenantId, item.externalId, gid);
+    return readSpreadsheetText(tenantId, item.externalId, gid);
   }
   if (item.kind === 'doc' || item.kind === 'folder') {
     return readSourceContent(tenantId, item.kind, item.externalId);

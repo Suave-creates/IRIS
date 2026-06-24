@@ -66,6 +66,15 @@ export const googleClient = {
     }
     return res.text();
   },
+  /** Fetches a URL and returns the raw response bytes (e.g. an uploaded .xlsx). */
+  getBuffer: async (tenantId: string, url: string): Promise<Buffer> => {
+    const res = await rawRequest(tenantId, url);
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw Errors.upstream(`Google API error (${res.status}): ${text.slice(0, 160)}`, 'Try reconnecting Google.');
+    }
+    return Buffer.from(await res.arrayBuffer());
+  },
   post: <T>(tenantId: string, url: string, body: unknown, contentType = 'application/json') =>
     request<T>(tenantId, url, {
       method: 'POST',

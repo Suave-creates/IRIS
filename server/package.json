@@ -27,6 +27,7 @@
     "mysql2": "^3.11.3",
     "nanoid": "^5.0.7",
     "pino": "^9.5.0",
+    "xlsx": "^0.18.5",
     "zod": "^3.23.8"
   },
   "devDependencies": {
