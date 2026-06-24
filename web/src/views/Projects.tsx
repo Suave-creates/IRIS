@@ -54,6 +54,13 @@ export function Projects() {
   const fetchErr =
     fetchProjects.error instanceof ApiError ? fetchProjects.error.message : null;
 
+  // Lightweight refresh: re-pull the current cards + sources from the server (no AI).
+  const refreshing = projects.isFetching || sources.isFetching;
+  const refresh = () => {
+    void projects.refetch();
+    void sources.refetch();
+  };
+
   const allProjects = projects.data ?? [];
 
   // Distinct source files present (each linked sheet/doc/folder, plus non-file origins).
@@ -100,6 +107,15 @@ export function Projects() {
           </p>
         </div>
         <div className={styles.headerActions}>
+          <Button
+            variant="secondary"
+            leftIcon={<Refresh size={15} className={refreshing ? styles.spin : undefined} />}
+            onClick={refresh}
+            disabled={refreshing}
+            title="Re-pull the latest project cards (no AI)"
+          >
+            Refresh
+          </Button>
           <Button variant="secondary" leftIcon={<Plus size={15} />} onClick={() => setAddOpen(true)}>
             Add project
           </Button>
@@ -107,6 +123,7 @@ export function Projects() {
             leftIcon={<Sparkle size={15} />}
             loading={fetchProjects.isPending}
             onClick={() => fetchProjects.mutate()}
+            title="Re-read your linked sources and re-extract project cards with AI"
           >
             Fetch from sources
           </Button>
