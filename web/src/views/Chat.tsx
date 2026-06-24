@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import type { ChatContextSource } from '@iris/shared';
 import { Brain, Calendar, Check, Folder, Mail, Search, Send, Sparkle } from '@/components/icons';
 import { Markdown } from '@/components/Markdown';
+import { InsightView } from '@/views/InsightView';
 import { ApprovalModal } from '@/features/actions/ApprovalModal';
 import { useChat } from '@/features/chat/useChat';
 import styles from './Chat.module.css';
@@ -90,7 +91,10 @@ export function Chat() {
                       ) : user ? (
                         m.text
                       ) : (
-                        <Markdown>{m.text}</Markdown>
+                        <>
+                          <Markdown>{m.text}</Markdown>
+                          {m.artifact && <InsightView body={m.artifact} />}
+                        </>
                       )}
                     </div>
                     {m.hasActions && (

@@ -1,13 +1,49 @@
 import type Anthropic from '@anthropic-ai/sdk';
-import type { ChatTurnResult } from '@iris/shared';
+import type { ChatTurnResult, WhiteboardInsight } from '@iris/shared';
 import type { UserSettings } from '../auth/types.js';
 import { execute } from '../../db/pool.js';
+import { hasAnthropic } from '../../config/env.js';
 import { id } from '../../lib/ids.js';
 import { logger } from '../../lib/logger.js';
 import { streamChat, extractWithTool, systemBlocks } from '../../lib/anthropic.js';
+import { RENDER_INSIGHT_TOOL, normalizeInsight } from '../../lib/insight.js';
 import { assembleContext, CONTEXT_WINDOW } from '../context/engine.js';
 import { chatRepo } from './chat.repo.js';
 import { persona, PREPARE_ACTIONS_TOOL, REFLECT_SYSTEM, type ReflectResult } from './prompts.js';
+
+const INSIGHT_SYSTEM =
+  'You turn an assistant answer into OPTIONAL supporting infographics. Call render_insight. ' +
+  'Only produce blocks when the answer contains quantitative data, comparisons, trends, key metrics, or structured ' +
+  'records that genuinely benefit from a chart (bar for category comparisons, line for trends), KPI cards, or a table. ' +
+  'If the answer is purely conversational or has no real numbers, return an EMPTY blocks array. ' +
+  'Never invent data — use only numbers present in the answer or the context. Keep it tight: a few cards, one chart, or one table.';
+
+/** Best-effort: turns a chat answer into a visual artifact, or null when none applies. */
+async function generateChatInsight(query: string, reply: string, contextBlock: string): Promise<WhiteboardInsight | null> {
+  // Infographics need numbers — skip the extra AI call on purely conversational replies.
+  if (!hasAnthropic || !/\d/.test(reply)) return null;
+  try {
+    const result = await extractWithTool<{ title?: unknown; blocks?: unknown[] }>({
+      system: systemBlocks(INSIGHT_SYSTEM),
+      messages: [
+        {
+          role: 'user',
+          content:
+            `User asked:\n"""${query}"""\n\nIRIS answered:\n"""${reply}"""\n\n` +
+            `Context available (use only real numbers from here or the answer):\n${contextBlock || '(none)'}\n\n` +
+            `Produce supporting infographics via render_insight, or empty blocks if none apply.`,
+        },
+      ],
+      tool: RENDER_INSIGHT_TOOL,
+      maxTokens: 2000,
+    });
+    const insight = normalizeInsight(result, 'Details');
+    return insight.blocks.length ? insight : null;
+  } catch (err) {
+    logger.warn({ err }, 'chat insight generation failed (non-fatal)');
+    return null;
+  }
+}
 
 export interface RunTurnArgs {
   tenantId: string;
@@ -64,19 +100,24 @@ export async function runTurn(args: RunTurnArgs): Promise<ChatTurnResult> {
   // 6. Persist the assistant reply.
   const irisMsgId = await chatRepo.addMessage(tenantId, conversationId, 'iris', reply);
 
-  // 7. Reflect: extract actions + memories from the exchange.
-  let actionsPrepared = 0;
-  try {
-    actionsPrepared = await reflect({ ...args, conversationId, reply, irisMsgId });
-  } catch (err) {
-    logger.warn({ err }, 'reflect step failed (non-fatal)');
-  }
+  // 7. In parallel: reflect (actions + memories) and build an optional visual artifact.
+  const [actionsPrepared, artifact] = await Promise.all([
+    reflect({ ...args, conversationId, reply, irisMsgId }).catch((err) => {
+      logger.warn({ err }, 'reflect step failed (non-fatal)');
+      return 0;
+    }),
+    generateChatInsight(text, reply, contextBlock),
+  ]);
+
+  const artifactJson = artifact ? JSON.stringify(artifact) : null;
+  if (artifactJson) await chatRepo.setMessageArtifact(irisMsgId, artifactJson);
 
   return {
     conversationId,
     sources,
     tokens: { used: usage.inputTokens + usage.outputTokens, window: CONTEXT_WINDOW },
     actionsPrepared,
+    artifact: artifactJson,
   };
 }
 

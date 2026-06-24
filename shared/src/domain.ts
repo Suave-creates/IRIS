@@ -249,6 +249,8 @@ export interface ChatMessage {
   text: string;
   createdAt: string;
   hasActions?: boolean;
+  /** JSON-encoded WhiteboardInsight ({title, blocks}) — an optional infographic for the reply. */
+  artifact?: string | null;
 }
 /** A piece of context the engine selected and injected (shown in the context rail). */
 export interface ChatContextSource {
@@ -264,6 +266,8 @@ export interface ChatTurnResult {
   sources: ChatContextSource[];
   tokens: { used: number; window: number };
   actionsPrepared: number;
+  /** JSON-encoded WhiteboardInsight for the reply, or null when none was generated. */
+  artifact?: string | null;
 }
 
 // ── Lens ──────────────────────────────────────────────────────────────────────

@@ -13,6 +13,7 @@ interface MsgRow extends RowDataPacket {
   role: 'user' | 'iris';
   content: string;
   has_actions: number;
+  artifact_body: string | null;
   created_at: string;
 }
 
@@ -44,7 +45,7 @@ export const chatRepo = {
 
   async listMessages(tenantId: string, convId: string): Promise<ChatMessage[]> {
     const rows = await query<MsgRow[]>(
-      'SELECT id, role, content, has_actions, created_at FROM conversation_messages WHERE conversation_id = :c AND tenant_id = :t ORDER BY created_at',
+      'SELECT id, role, content, has_actions, artifact_body, created_at FROM conversation_messages WHERE conversation_id = :c AND tenant_id = :t ORDER BY created_at',
       { c: convId, t: tenantId },
     );
     return rows.map((r) => ({
@@ -53,6 +54,7 @@ export const chatRepo = {
       text: r.content,
       createdAt: r.created_at,
       hasActions: !!r.has_actions,
+      artifact: r.artifact_body ?? null,
     }));
   },
 
@@ -83,5 +85,10 @@ export const chatRepo = {
 
   async markMessageActions(msgId: string): Promise<void> {
     await execute('UPDATE conversation_messages SET has_actions = 1 WHERE id = :id', { id: msgId });
+  },
+
+  /** Attaches a JSON-encoded visual artifact to an assistant message. */
+  async setMessageArtifact(msgId: string, artifactJson: string): Promise<void> {
+    await execute('UPDATE conversation_messages SET artifact_body = :a WHERE id = :id', { id: msgId, a: artifactJson });
   },
 };

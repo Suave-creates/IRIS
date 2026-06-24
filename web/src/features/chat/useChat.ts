@@ -47,8 +47,14 @@ export function useChat() {
             conversationId.current = result.conversationId;
             setSources(result.sources);
             setTokens(result.tokens);
+            setMessages((m) =>
+              m.map((msg) =>
+                msg.id === irisId
+                  ? { ...msg, hasActions: result.actionsPrepared > 0, artifact: result.artifact ?? null }
+                  : msg,
+              ),
+            );
             if (result.actionsPrepared > 0) {
-              setMessages((m) => m.map((msg) => (msg.id === irisId ? { ...msg, hasActions: true } : msg)));
               qc.invalidateQueries({ queryKey: ['actions'] });
               qc.invalidateQueries({ queryKey: ['dashboard'] });
             }
