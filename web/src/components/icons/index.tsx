@@ -192,6 +192,15 @@ export const User = (p: IconProps) => (
   </Svg>
 );
 
+export const Users = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="9" cy="7.5" r="3.4" />
+    <path d="M2.5 20a6.5 6.5 0 0 1 13 0" />
+    <path d="M16 4.6a3.4 3.4 0 0 1 0 6.6" />
+    <path d="M17.8 14.1a6.5 6.5 0 0 1 3.7 5.9" />
+  </Svg>
+);
+
 export const LogOut = (p: IconProps) => (
   <Svg {...p} strokeWidth={p.strokeWidth ?? 1.8}>
     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />

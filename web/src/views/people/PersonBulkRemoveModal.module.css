@@ -1,0 +1,149 @@
+.wrap {
+  padding: 20px 22px;
+}
+
+/* ── Header ────────────────────────────────────────────────────────── */
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.title {
+  font-size: 15px;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+}
+.close {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 1;
+}
+.close:hover {
+  background: var(--surface-2);
+}
+
+/* ── Toolbar ───────────────────────────────────────────────────────── */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.count {
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--text-2);
+  margin-right: auto;
+}
+.toolBtn {
+  font-size: 11.5px;
+  font-weight: 650;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-2);
+  background: var(--surface);
+  color: var(--text-2);
+  cursor: pointer;
+}
+.toolBtn:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.toolBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Roster list ───────────────────────────────────────────────────── */
+.list {
+  max-height: 340px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--surface-2);
+  padding: 8px 10px;
+}
+.groupLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  margin: 8px 0 4px;
+}
+.groupSwatch {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 6px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.row:hover {
+  background: var(--surface);
+}
+.check {
+  accent-color: var(--danger);
+  cursor: pointer;
+}
+.name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+.meta {
+  font-size: 10.5px;
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.empty {
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-3);
+  padding: 18px 0;
+}
+
+/* ── Confirm + error ───────────────────────────────────────────────── */
+.confirmNote {
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-radius: 9px;
+  padding: 8px 11px;
+}
+.error {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-radius: 9px;
+  padding: 8px 11px;
+}
+
+/* ── Footer ────────────────────────────────────────────────────────── */
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}

@@ -1,4 +1,13 @@
-import type { ConnectorProvider, ConnectorStatus, Priority, Role } from './constants.js';
+import type {
+  ConnectorProvider,
+  ConnectorStatus,
+  MeetingMode,
+  PersonCategory,
+  PersonFunction,
+  PersonLocation,
+  Priority,
+  Role,
+} from './constants.js';
 
 // ── Projects ────────────────────────────────────────────────────────────────
 export type ProjectSourceType = 'manual' | 'calendar' | 'journal' | 'conversation' | 'sheet' | 'doc' | 'folder';
@@ -96,6 +105,224 @@ export interface JournalTaskInput {
   detail?: string | null;
 }
 
+// ── People & Context ────────────────────────────────────────────────────────
+export type EngagementTrend = 'rising' | 'steady' | 'cooling';
+export type EngagementStatus = 'Highly Active' | 'Active' | 'Moderate' | 'Low Activity' | 'Dormant';
+export type PersonInteractionType = 'Meeting' | 'Call' | 'Discussion' | 'Note';
+
+/** Server-computed engagement, derived from cadence + engagement events. */
+export interface PersonEngagement {
+  score: number; // 0–99 (capped)
+  statusLabel: EngagementStatus;
+  trend: EngagementTrend;
+  lastInteraction: string | null; // "Today" | "2d ago" | null when no interactions
+  meetingsThisMonth: number;
+  /** Score gained from processed meetings (0 = no boost). */
+  boostDelta: number;
+  /** Title of the most recent boosting meeting. */
+  boostTitle: string | null;
+}
+export interface Person {
+  id: string;
+  name: string;
+  category: PersonCategory;
+  func: PersonFunction;
+  location: PersonLocation;
+  days: number[]; // engagement weekdays, 1=Mon … 6=Sat
+  cadence: string; // derived label: "Twice a week"
+  email: string | null;
+  company: string | null;
+  role: string | null;
+  engagement: PersonEngagement;
+}
+export interface PersonInput {
+  name: string;
+  category: PersonCategory;
+  func: PersonFunction;
+  location: PersonLocation;
+  days: number[];
+  email?: string | null;
+  company?: string | null;
+  role?: string | null;
+}
+/** Result of a bulk roster import (POST /api/people/bulk). */
+export interface BulkPeopleResult {
+  created: Person[];
+  /** Names skipped because a person with that name already exists. */
+  skipped: string[];
+}
+
+export interface PersonDayDetailItem {
+  kind: 'ACTION' | 'DECISION';
+  text: string;
+}
+/** Shown under the drawer calendar when an interaction day is clicked. */
+export interface PersonDayDetail {
+  title: string; // "Mon, Jun 23 · with Raj Pandey"
+  typeLabel: string; // interaction type, or "Recorded" for processed meetings
+  type: PersonInteractionType;
+  fromMeeting: boolean;
+  summary: string;
+  items: PersonDayDetailItem[];
+}
+export interface PersonCalendarDay {
+  day: number;
+  isToday: boolean;
+  /** Interaction types on this day (max 2 dots, like the design). */
+  dots: PersonInteractionType[];
+  /** Full detail card, present only on days with interactions. */
+  detail: PersonDayDetail | null;
+}
+export interface PersonTimelineEntry {
+  dateLabel: string; // "Mon · Jun 23"
+  type: PersonInteractionType;
+  fromMeeting: boolean;
+  title: string;
+  snippet: string;
+}
+export interface PersonTopicRow {
+  name: string;
+  mentions: number;
+  pct: number; // 0–100 bar width
+}
+export interface PersonActionRow {
+  title: string;
+  meta: string;
+  dueLabel: string | null;
+  done: boolean;
+}
+export interface PersonFileRow {
+  name: string;
+  /** Short kind chip: "DOC", "URL", "GIT", "JIRA", … */
+  kind: string;
+  meta: string;
+  /** Link target when the artifact carries one. */
+  ref: string | null;
+}
+export interface PersonInsightRow {
+  kind: 'theme' | 'followthrough' | 'nextstep';
+  title: string;
+  text: string;
+}
+/** The full drawer payload for one person (GET /api/people/:id/context). */
+export interface PersonContext {
+  summary: string;
+  /** Green banner copy when a processed meeting boosted this person, else null. */
+  boostNote: string | null;
+  monthLabel: string; // "July 2026" — the current month
+  monthShort: string; // "July" — the "/July" stat suffix
+  /** Empty grid cells before day 1 so the calendar aligns to its real weekday. */
+  calendarLeadingBlanks: number;
+  healthPct: number;
+  calendar: PersonCalendarDay[];
+  timeline: PersonTimelineEntry[];
+  topics: PersonTopicRow[];
+  openActions: PersonActionRow[];
+  doneActions: PersonActionRow[];
+  files: PersonFileRow[];
+  insights: PersonInsightRow[];
+}
+
+// ── Meeting Intelligence ──────────────────────────────────────────────────────
+export type MeetingSentiment = 'Positive' | 'Mixed' | 'Neutral';
+export interface MeetingTranscriptLine {
+  tsLabel: string; // "02:05"
+  speaker: string;
+  text: string;
+}
+export interface MeetingActionRow {
+  id: string;
+  title: string;
+  ownerMeta: string; // "Owner Janhvi"
+  dueLabel: string | null; // "Jun 25"
+  done: boolean;
+}
+export interface MeetingDecisionRow {
+  id: string;
+  title: string;
+}
+/** Per-participant context change shown on the Context updates tab. */
+export interface MeetingCtxUpdate {
+  who: string;
+  change: string;
+  delta: string; // "Engagement 91→92" | "Engagement +1"
+}
+/** A file/link/ticket/repo referenced in a meeting, extracted from the transcript. */
+export interface MeetingArtifact {
+  /** 'url' | 'github' | 'jira' | 'linear' | 'gdoc' | 'sheet' | 'drive' | 'figma' | 'notion' | 'confluence' | 'doc' | 'other' */
+  kind: string;
+  label: string;
+  /** Resolvable link when one was actually shared, else null. */
+  ref: string | null;
+}
+export interface Meeting {
+  id: string;
+  title: string;
+  mode: MeetingMode;
+  /** True for the meeting recorded "today" via the recorder (NEW chip). */
+  isNew: boolean;
+  dowLabel: string; // "FRI"
+  dayNum: number; // 20
+  dateLabel: string; // "Jun 20" — server-derived so the client never re-derives the frame
+  timeLabel: string; // "9:00 AM" | "Just now"
+  durationLabel: string; // "45 min" | "03:24"
+  sentiment: MeetingSentiment;
+  summary: string;
+  topics: string[];
+  participants: string[];
+  risks: string[];
+  followups: string[];
+  actions: MeetingActionRow[];
+  decisions: MeetingDecisionRow[];
+  transcript: MeetingTranscriptLine[];
+  ctxUpdates: MeetingCtxUpdate[];
+  linkNote: string;
+  /** Files, links, repos and tickets referenced in the meeting. */
+  artifacts: MeetingArtifact[];
+  /** Items carried over from previous meetings (addressed or still open). */
+  carryovers: string[];
+  /** Transcription engine: "whisper-large-v3" | "browser-speech" | null (legacy). */
+  sttEngine: string | null;
+}
+export interface RecordingTranscriptLine {
+  tsSecs: number;
+  speaker: string;
+  text: string;
+}
+/** Finalizes a recording (POST /api/meetings): live transcript in, processed meeting out. */
+export interface RecordingInput {
+  mode: MeetingMode;
+  durationSecs: number;
+  transcript: RecordingTranscriptLine[];
+  /** Title of the detected calendar meeting this recording belongs to, if any. */
+  titleHint?: string | null;
+}
+
+/** A calendar meeting happening right now (drives the "meeting detected" banner). */
+export interface LiveMeeting {
+  id: string;
+  title: string;
+  startAt: string; // ISO
+  endAt: string; // ISO
+  location: string | null;
+  attendees: number;
+  /** Attendee display names/emails fetched live from Google Calendar (when linked). */
+  attendeeNames: string[];
+  /** The event's Google Calendar id when synced from Google, else null. */
+  googleEventId: string | null;
+}
+export interface EngagementBoost {
+  personId: string;
+  name: string;
+  delta: number;
+}
+export interface ProcessedMeeting {
+  meeting: Meeting;
+  engagement: EngagementBoost[];
+  calendarDateLabel: string; // "Jun 23"
+  openActionCount: number;
+}
+
 // ── Calendar ──────────────────────────────────────────────────────────────
 export interface CalendarEvent {
   id: string;
@@ -121,6 +348,14 @@ export interface CalendarEventInput {
 export interface CalendarGuest {
   name: string;
   email: string;
+}
+
+/** A contact autocomplete suggestion with organization profile (People API). */
+export interface ContactSuggestion {
+  name: string;
+  email: string;
+  company: string | null;
+  role: string | null;
 }
 
 // ── Mail ──────────────────────────────────────────────────────────────────
@@ -255,7 +490,7 @@ export interface ChatMessage {
 /** A piece of context the engine selected and injected (shown in the context rail). */
 export interface ChatContextSource {
   id: string;
-  kind: 'memory' | 'mail' | 'calendar' | 'project' | 'task' | 'action';
+  kind: 'memory' | 'mail' | 'calendar' | 'project' | 'task' | 'action' | 'meeting';
   label: string;
   sublabel: string;
   relevance: number; // 0–100

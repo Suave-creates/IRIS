@@ -105,14 +105,58 @@ export async function deleteCalendarEvent(tenantId: string, googleEventId: strin
   await googleClient.del(tenantId, `${EVENTS_URL}/${encodeURIComponent(googleEventId)}?sendUpdates=all`);
 }
 
+// ── Live attendees (meeting-detection banner + recording attribution) ─────────
+export interface EventAttendee {
+  name: string | null;
+  email: string;
+}
+
+/**
+ * Fetches the live attendee list of one primary-calendar event. Best-effort by
+ * design: no Google grant, a deleted event, or a network failure all yield []
+ * so callers (the recorder pipeline) degrade gracefully.
+ */
+export async function getEventAttendees(tenantId: string, googleEventId: string): Promise<EventAttendee[]> {
+  try {
+    if (!(await googleClient.isConnected(tenantId))) return [];
+    const fields = encodeURIComponent('attendees(displayName,email)');
+    const ev = await googleClient.get<{ attendees?: { displayName?: string; email?: string }[] }>(
+      tenantId,
+      `${EVENTS_URL}/${encodeURIComponent(googleEventId)}?fields=${fields}`,
+    );
+    const out: EventAttendee[] = [];
+    for (const a of ev.attendees ?? []) {
+      const email = a.email?.trim();
+      if (!email) continue;
+      out.push({ name: a.displayName?.trim() || null, email });
+    }
+    return out;
+  } catch (err) {
+    logger.warn(
+      { err: err instanceof Error ? err.message : String(err), googleEventId },
+      'event attendees fetch failed',
+    );
+    return [];
+  }
+}
+
 // ── Guest suggestions (People API) ─────────────────────────────────────────────
 export interface PersonSuggestion {
   name: string;
   email: string;
+  /** Organization name from the contact/directory profile, when present. */
+  company: string | null;
+  /** Job title from the contact/directory profile, when present. */
+  role: string | null;
+}
+interface PeoplePerson {
+  names?: { displayName?: string }[];
+  emailAddresses?: { value?: string }[];
+  organizations?: { name?: string; title?: string }[];
 }
 interface PeopleResult {
-  results?: { person?: { names?: { displayName?: string }[]; emailAddresses?: { value?: string }[] } }[];
-  people?: { names?: { displayName?: string }[]; emailAddresses?: { value?: string }[] }[];
+  results?: { person?: PeoplePerson }[];
+  people?: PeoplePerson[];
 }
 
 function mapPeople(data: PeopleResult): PersonSuggestion[] {
@@ -121,7 +165,13 @@ function mapPeople(data: PeopleResult): PersonSuggestion[] {
   for (const p of rows) {
     const email = p?.emailAddresses?.[0]?.value?.trim();
     if (!email) continue;
-    out.push({ name: p?.names?.[0]?.displayName?.trim() || email, email });
+    const org = p?.organizations?.[0];
+    out.push({
+      name: p?.names?.[0]?.displayName?.trim() || email,
+      email,
+      company: org?.name?.trim() || null,
+      role: org?.title?.trim() || null,
+    });
   }
   return out;
 }
@@ -134,7 +184,7 @@ function mapPeople(data: PeopleResult): PersonSuggestion[] {
 export async function searchPeople(tenantId: string, query: string): Promise<PersonSuggestion[]> {
   const q = query.trim();
   if (q.length < 2) return [];
-  const readMask = encodeURIComponent('names,emailAddresses');
+  const readMask = encodeURIComponent('names,emailAddresses,organizations');
   const enc = encodeURIComponent(q);
 
   const onErr = (source: string) => (err: unknown) => {

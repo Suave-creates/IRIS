@@ -1,0 +1,350 @@
+/* ── Page shell ────────────────────────────────────────────────────── */
+.page {
+  padding: 24px 32px 48px;
+  max-width: 1240px;
+  width: 100%;
+  margin: 0 auto;
+}
+.header {
+  margin-bottom: 18px;
+}
+.title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.subtitle {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--text-3);
+  max-width: 720px;
+}
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
+  padding: 20px 22px;
+}
+
+/* ── Filter row ────────────────────────────────────────────────────── */
+.filters {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.catChip,
+.catChipOn {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 11px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.catChip {
+  background: transparent;
+  color: var(--text-2);
+  border: 0.5px solid var(--border-2);
+}
+.catChipOn {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 0.5px solid var(--accent);
+}
+.locGroup {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+  align-items: center;
+}
+.locLabel {
+  font-size: 11px;
+  color: var(--text-3);
+  font-weight: 600;
+}
+.locChip {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: transparent;
+  color: var(--text-3);
+  border: 0.5px solid var(--border-2);
+}
+.addBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 650;
+  padding: 6px 13px;
+  border-radius: 9px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  margin-left: 8px;
+}
+.addBtn:hover {
+  filter: brightness(1.06);
+}
+/* Bulk actions match the location chips' metrics exactly. */
+.bulkBtn {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: var(--radius-sm);
+  border: 0.5px solid var(--border-2);
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+  margin-left: 8px;
+}
+.bulkBtn:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.bulkRemoveBtn {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: var(--radius-sm);
+  border: 0.5px solid rgba(209, 67, 67, 0.35);
+  background: transparent;
+  color: var(--danger);
+  cursor: pointer;
+}
+.bulkRemoveBtn:hover {
+  background: var(--danger-soft);
+}
+
+/* ── Grid + day header ─────────────────────────────────────────────── */
+.gridRow {
+  display: grid;
+  grid-template-columns: 252px repeat(6, 1fr) 112px;
+  gap: 5px;
+  align-items: stretch;
+}
+.dayHead {
+  margin-bottom: 8px;
+}
+.countCell {
+  display: flex;
+  align-items: flex-end;
+  padding: 0 8px 6px;
+}
+.countText {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3);
+}
+.dayHeadCell {
+  border-radius: 9px;
+  padding: 7px 4px;
+  text-align: center;
+  border: 0.5px solid transparent;
+}
+.dayHeadTop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.dayHeadName {
+  font-weight: 700;
+  font-size: 12.5px;
+}
+.dayHeadPill {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 0 6px;
+  border-radius: 99px;
+}
+.dayHeadTheme {
+  font-size: 9.5px;
+  color: var(--text-3);
+  margin-top: 2px;
+  line-height: 1.25;
+}
+.engHead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 6px;
+}
+
+/* ── Category sections ─────────────────────────────────────────────── */
+.groupLabel {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 16px 0 7px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.groupSwatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  display: inline-block;
+}
+.groupCount {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-3);
+  letter-spacing: 0;
+}
+
+/* ── Person rows ───────────────────────────────────────────────────── */
+.row {
+  margin-bottom: 4px;
+  cursor: pointer;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.row:hover {
+  background: var(--surface-2);
+}
+.rowSelected,
+.rowSelected:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.nameCell {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 8px;
+  min-height: 42px;
+}
+.avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 750;
+}
+.nameCol {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.personName {
+  font-weight: 600;
+  font-size: 12.5px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.personMeta {
+  font-size: 10px;
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dayCell {
+  border-radius: 7px;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 4px 0;
+  padding: 0;
+  cursor: pointer;
+  border: 0.5px solid transparent;
+  background: var(--surface-3);
+}
+.dayCell:hover {
+  box-shadow: inset 0 0 0 1.5px var(--border-2);
+}
+.engCell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+}
+.scoreRow {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+}
+.score {
+  font-size: 14.5px;
+  font-weight: 750;
+  color: var(--text);
+}
+.trendArrow {
+  font-size: 11px;
+  font-weight: 700;
+}
+.boostPill {
+  font-size: 8.5px;
+  font-weight: 750;
+  color: var(--success);
+  background: rgba(31, 157, 87, 0.08);
+  border: 0.5px solid rgba(31, 157, 87, 0.21);
+  padding: 1px 5px;
+  border-radius: 99px;
+}
+.lastInt {
+  font-size: 9px;
+  color: var(--text-3);
+}
+
+/* ── States ────────────────────────────────────────────────────────── */
+.skeletonHead {
+  height: 52px;
+  border-radius: 9px;
+  margin-bottom: 8px;
+}
+.skeletonRow {
+  height: 44px;
+  border-radius: 10px;
+  margin-bottom: 4px;
+}
+.inlineError {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--danger);
+  background: var(--danger-soft);
+  padding: 11px 14px;
+  border-radius: var(--radius);
+}
+.emptyState {
+  font-size: 13px;
+  color: var(--text-3);
+  text-align: center;
+  padding: 40px 0;
+  border: 1px dashed var(--border-2);
+  border-radius: var(--radius-lg);
+  margin-top: 8px;
+}
+
+@media (max-width: 600px) {
+  .page {
+    padding: 22px 18px 40px;
+  }
+  .roster {
+    overflow-x: auto;
+  }
+  .gridRow {
+    min-width: 760px;
+  }
+}

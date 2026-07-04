@@ -1,0 +1,147 @@
+.wrap {
+  padding: 20px 22px;
+}
+
+/* ── Header ────────────────────────────────────────────────────────── */
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.title {
+  font-size: 15px;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+}
+.close {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 1;
+}
+.close:hover {
+  background: var(--surface-2);
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--text-2);
+  line-height: 1.55;
+  margin-bottom: 10px;
+}
+.mono {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--surface-3);
+  padding: 1px 5px;
+  border-radius: 5px;
+}
+
+/* ── Paste area + file picker ──────────────────────────────────────── */
+.paste {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+.fileRow {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 8px 0 4px;
+}
+.fileBtn {
+  font-size: 11.5px;
+  font-weight: 650;
+  padding: 5px 11px;
+  border-radius: 8px;
+  border: 1px solid var(--border-2);
+  background: var(--surface);
+  color: var(--text-2);
+  cursor: pointer;
+}
+.fileBtn:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.fileNote {
+  font-size: 10.5px;
+  color: var(--text-3);
+}
+.fileInput {
+  display: none;
+}
+
+/* ── Preview ───────────────────────────────────────────────────────── */
+.preview {
+  margin-top: 10px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--surface-2);
+  padding: 11px 13px;
+}
+.previewHead {
+  margin-bottom: 8px;
+}
+.previewLabel {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  max-height: 128px;
+  overflow-y: auto;
+}
+.personChip {
+  font-size: 11px;
+  font-weight: 650;
+  padding: 2px 8px;
+  border-radius: 99px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.moreNote {
+  font-size: 11px;
+  color: var(--text-3);
+  align-self: center;
+}
+.skippedNote {
+  font-size: 11px;
+  color: var(--text-3);
+  line-height: 1.5;
+  margin-top: 8px;
+}
+.issues {
+  margin: 8px 0 0;
+  padding-left: 16px;
+  font-size: 11px;
+  color: var(--warn);
+  line-height: 1.55;
+}
+
+.error {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-radius: 9px;
+  padding: 8px 11px;
+}
+
+/* ── Footer ────────────────────────────────────────────────────────── */
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}

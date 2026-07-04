@@ -46,6 +46,19 @@ const boolish = z
   .union([z.boolean(), z.string()])
   .transform((v) => (typeof v === 'boolean' ? v : ['1', 'true', 'yes', 'on'].includes(v.toLowerCase())));
 
+/**
+ * Default python interpreter for local Whisper transcription. The server runs
+ * with cwd = `server/` (npm workspace) or the repo root — probe both, and fall
+ * back to the server-relative path when the venv has not been created yet.
+ */
+function defaultWhisperPython(): string {
+  const candidates = [
+    resolve(process.cwd(), 'whisper', '.venv', 'Scripts', 'python.exe'),
+    resolve(process.cwd(), 'server', 'whisper', '.venv', 'Scripts', 'python.exe'),
+  ];
+  return candidates.find((p) => existsSync(p)) ?? candidates[0]!;
+}
+
 const EnvSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -64,6 +77,11 @@ const EnvSchema = z
 
     ANTHROPIC_API_KEY: z.string().default(''),
     ANTHROPIC_MODEL: z.string().default('claude-sonnet-4-6'),
+
+    /** Python interpreter of the faster-whisper venv (server/whisper/.venv). */
+    WHISPER_PYTHON: z.string().min(1).default(defaultWhisperPython()),
+    /** Whisper model id passed to transcribe.py (accuracy over speed). */
+    WHISPER_MODEL: z.string().min(1).default('large-v3'),
 
     SESSION_SECRET: z.string().default('dev-insecure-session-secret-change-me'),
     TOKEN_ENCRYPTION_KEY: z.string().default(''),

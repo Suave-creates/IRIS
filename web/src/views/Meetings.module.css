@@ -1,0 +1,278 @@
+.page {
+  padding: 24px 32px 48px;
+  max-width: 1240px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* ── Header ── */
+.header {
+  margin-bottom: 18px;
+}
+.title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.subtitle {
+  margin: 5px 0 0;
+  font-size: 13px;
+  color: var(--text-3);
+  max-width: 640px;
+}
+
+/* ── Search + suggestions ── */
+.searchRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.searchBox {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: 1;
+  min-width: 260px;
+  padding: 9px 14px;
+  border-radius: 11px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.searchIcon {
+  color: var(--text-3);
+  flex: none;
+}
+.searchInput {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 13px;
+  color: var(--text);
+  font-family: inherit;
+}
+.searchInput::placeholder {
+  color: var(--text-3);
+}
+.suggestChip {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-2);
+  background: var(--surface);
+  border: 1px solid var(--border-2);
+  border-radius: 99px;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+.suggestChip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ── List label row ── */
+.listHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.listLabel {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.listNote {
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+/* ── Meeting rows ── */
+.row {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  color: var(--text);
+  font-family: inherit;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 13px 16px;
+  margin-bottom: 9px;
+  cursor: pointer;
+  box-shadow: var(--shadow-1);
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+.row:hover {
+  border-color: rgba(var(--accent-rgb), 0.4);
+  background: var(--surface-2);
+}
+.dateBlock {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  line-height: 1;
+}
+.dateDow {
+  font-size: 8.5px;
+  font-weight: 700;
+}
+.dateNum {
+  font-size: 15px;
+  font-weight: 800;
+  margin-top: 2px;
+}
+.rowMain {
+  flex: 1;
+  min-width: 0;
+}
+.rowTitleLine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.rowTitle {
+  font-size: 13.5px;
+  font-weight: 700;
+}
+.modeChip {
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.05em;
+  padding: 2px 7px;
+  border-radius: 99px;
+}
+.modeChip[data-mode='new'] {
+  color: #fff;
+  background: var(--accent);
+}
+.modeChip[data-mode='online'] {
+  color: var(--info);
+  background: var(--info-soft);
+}
+.modeChip[data-mode='inroom'] {
+  color: var(--text-2);
+  background: var(--surface-3);
+}
+.rowSummary {
+  font-size: 12px;
+  color: var(--text-2);
+  margin-top: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rowChips {
+  display: flex;
+  gap: 6px;
+  margin-top: 7px;
+  flex-wrap: wrap;
+}
+.chip {
+  font-size: 10px;
+  font-weight: 650;
+  padding: 2px 8px;
+  border-radius: 99px;
+}
+.chip[data-tone='neutral'] {
+  color: var(--text-2);
+  background: var(--surface-3);
+}
+.chip[data-tone='warn'] {
+  color: var(--warn);
+  background: var(--warn-soft);
+}
+.chip[data-tone='success'] {
+  color: var(--success);
+  background: var(--success-soft);
+}
+.chip[data-tone='accent'] {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.rowRight {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+  flex: none;
+}
+.rowWhen {
+  font-size: 11px;
+  color: var(--text-3);
+}
+.sentiment {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  font-weight: 650;
+}
+.sentimentDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+/* ── Search empty state ── */
+.noResults {
+  text-align: center;
+  padding: 34px 0;
+  color: var(--text-3);
+  font-size: 13px;
+}
+.noResultsQuery {
+  color: var(--text-2);
+  font-weight: 600;
+}
+
+/* ── Loading / error / empty ladder ── */
+.listLoading {
+  display: flex;
+  justify-content: center;
+  padding: 48px 0;
+}
+.inlineError {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--danger);
+  background: var(--danger-soft);
+  padding: 11px 14px;
+  border-radius: var(--radius);
+}
+.emptyState {
+  font-size: 14px;
+  color: var(--text-3);
+  text-align: center;
+  padding: 48px 0;
+  border: 1px dashed var(--border-2);
+  border-radius: var(--radius-lg);
+}
+
+@media (max-width: 600px) {
+  .page {
+    padding: 22px 18px 40px;
+  }
+  .rowRight {
+    display: none;
+  }
+}

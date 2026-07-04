@@ -10,11 +10,13 @@ import {
   Journal,
   Layers,
   Mail,
+  Mic,
   Plug,
   Search,
   ShieldCheck,
   Gear,
   Sparkle,
+  Users,
   Whiteboard,
 } from '@/components/icons';
 
@@ -37,6 +39,8 @@ export const NAV_ITEMS: NavItem[] = [
   { key: 'mail', label: 'Mail', path: VIEW_PATHS.mail, Icon: Mail },
   { key: 'calendar', label: 'Calendar', path: VIEW_PATHS.calendar, Icon: Calendar },
   { key: 'journal', label: 'Journal', path: VIEW_PATHS.journal, Icon: Journal },
+  { key: 'people', label: 'People', path: VIEW_PATHS.people, Icon: Users },
+  { key: 'meetings', label: 'Meetings', path: VIEW_PATHS.meetings, Icon: Mic },
   { key: 'whiteboard', label: 'Whiteboard', path: VIEW_PATHS.whiteboard, Icon: Whiteboard },
   { key: 'knowledge', label: 'Lens', path: VIEW_PATHS.knowledge, Icon: Search },
   { key: 'connectors', label: 'Connectors', path: VIEW_PATHS.connectors, Icon: Plug },

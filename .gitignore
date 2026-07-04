@@ -38,3 +38,8 @@ tmp/
 
 # Design handoff bundle (source of truth, kept out of app build)
 Executive dashboard design overview-handoff/
+Executive dashboard design overview.zip
+design_handoff_extracted/
+
+# Whisper transcription env (recreate via server/whisper/README.md; venv + model cache stay local)
+server/whisper/.venv/

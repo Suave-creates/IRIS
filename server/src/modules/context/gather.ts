@@ -1,10 +1,12 @@
 import type { RowDataPacket } from 'mysql2/promise';
 import { query } from '../../db/pool.js';
+import { dateLabel } from '../../lib/design-frame.js';
+import { logger } from '../../lib/logger.js';
 
 /** A candidate piece of context, before ranking. */
 export interface Candidate {
   id: string;
-  kind: 'memory' | 'mail' | 'calendar' | 'project' | 'task' | 'action';
+  kind: 'memory' | 'mail' | 'calendar' | 'project' | 'task' | 'action' | 'meeting';
   label: string;
   sublabel: string;
   /** Full text used for relevance scoring + injection. */
@@ -17,6 +19,19 @@ export interface Candidate {
 
 interface Row extends RowDataPacket {
   [k: string]: unknown;
+}
+
+/** Renders a JSON string[] column (string or already-parsed) as a comma list. */
+function jsonList(raw: unknown): string {
+  let value: unknown = raw;
+  if (typeof raw === 'string') {
+    try {
+      value = JSON.parse(raw);
+    } catch {
+      value = [];
+    }
+  }
+  return Array.isArray(value) ? value.filter((s): s is string => typeof s === 'string').join(', ') : '';
 }
 
 /**
@@ -126,6 +141,29 @@ export async function gather(tenantId: string, userId: string): Promise<Candidat
       recencyTs: Date.now(),
       baseWeight: 0.7,
     });
+  }
+
+  // Isolated so a chat turn survives an environment where migration
+  // 0010_people_meetings has not been applied yet.
+  try {
+    const meetings = await query<Row[]>(
+      `SELECT id, title, summary, topics, participants, started_at FROM meetings
+       WHERE tenant_id = :t ORDER BY started_at DESC, created_at DESC LIMIT 10`,
+      { t: tenantId },
+    );
+    for (const m of meetings) {
+      out.push({
+        id: String(m.id),
+        kind: 'meeting',
+        label: String(m.title),
+        sublabel: `Meeting · ${dateLabel(String(m.started_at))}`,
+        text: `Meeting "${String(m.title)}": ${String(m.summary ?? '')} Topics: ${jsonList(m.topics)}. Participants: ${jsonList(m.participants)}.`,
+        recencyTs: Date.parse(String(m.started_at)) || 0,
+        baseWeight: 0.75,
+      });
+    }
+  } catch (err) {
+    logger.warn({ err }, 'meetings context gather skipped (table unavailable?)');
   }
 
   return out;

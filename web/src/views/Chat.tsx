@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import type { ChatContextSource } from '@iris/shared';
-import { Brain, Calendar, Check, Folder, Mail, Search, Send, Sparkle } from '@/components/icons';
+import { Brain, Calendar, Check, Folder, Mail, Mic, Search, Send, Sparkle } from '@/components/icons';
 import { Markdown } from '@/components/Markdown';
 import { InsightView } from '@/views/InsightView';
 import { ApprovalModal } from '@/features/actions/ApprovalModal';
@@ -20,6 +20,7 @@ const KIND_META: Record<ChatContextSource['kind'], { Icon: typeof Mail; bg: stri
   project: { Icon: Folder, bg: 'var(--warn-soft)', color: 'var(--warn)' },
   task: { Icon: Check, bg: 'var(--success-soft)', color: 'var(--success)' },
   action: { Icon: Sparkle, bg: 'var(--accent-soft)', color: 'var(--accent)' },
+  meeting: { Icon: Mic, bg: 'var(--accent-soft)', color: 'var(--accent)' },
 };
 
 export function Chat() {

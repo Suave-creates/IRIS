@@ -1,0 +1,263 @@
+/* ── Shell ─────────────────────────────────────────────────────────── */
+.wrap {
+  padding: 20px 22px;
+}
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.title {
+  font-size: 15px;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+}
+.close {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 1;
+}
+.close:hover {
+  background: var(--surface-2);
+}
+
+/* ── Fields ────────────────────────────────────────────────────────── */
+.fieldBlock {
+  margin-bottom: 12px;
+}
+
+/* ── Contact autocomplete dropdown ─────────────────────────────────── */
+.suggestWrap {
+  position: relative;
+}
+.suggestDrop {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 5;
+  background: var(--surface);
+  border: 1px solid var(--border-2);
+  border-radius: 10px;
+  box-shadow: var(--shadow-3);
+  overflow: hidden;
+  animation: irisDrop 0.15s ease;
+}
+.suggestRow {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+}
+.suggestRow[data-active='true'] {
+  background: var(--accent-soft);
+}
+.suggestName {
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--text);
+}
+.suggestEmail {
+  font-size: 11px;
+  color: var(--text-2);
+}
+.suggestOrg {
+  font-size: 10.5px;
+  color: var(--text-3);
+}
+.suggestFoot {
+  font-size: 10px;
+  color: var(--text-3);
+  padding: 5px 12px 6px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+}
+/* Prototype sizing (13px / 9px 12px) so the name field matches its sibling selects. */
+.nameInput {
+  font-size: 13px;
+  padding: 9px 12px;
+}
+/* Contact inputs match the name field's sizing. */
+.contactInput {
+  font-size: 13px;
+  padding: 9px 12px;
+}
+.contactRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 8px;
+}
+.labelHint {
+  font-weight: 500;
+  color: var(--text-3);
+}
+.label {
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--text-2);
+  margin-bottom: 5px;
+}
+.labelBare {
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--text-2);
+}
+.selectRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.select {
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: 9px;
+  border: 1px solid var(--border-2);
+  background: var(--surface);
+  font-size: 13px;
+  color: var(--text);
+  outline: none;
+}
+.select:focus {
+  border-color: var(--accent);
+}
+.chipRow {
+  display: flex;
+  gap: 6px;
+}
+/* Location chips can outgrow one row (user-extensible codes). */
+.chipRowWrap {
+  flex-wrap: wrap;
+}
+.chipRowWrap .chip {
+  flex: 0 0 auto;
+  min-width: 58px;
+  padding: 7px 12px;
+}
+.chip {
+  flex: 1;
+  padding: 7px 0;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  text-align: center;
+  border: 1px solid var(--border-2);
+  background: var(--surface);
+  color: var(--text-2);
+}
+.newLocChip {
+  border-style: dashed;
+  color: var(--text-3);
+}
+.newLocChip:hover {
+  color: var(--text);
+  background: var(--surface-2);
+}
+.newLocInput {
+  width: 84px;
+  padding: 7px 10px;
+  border-radius: 9px;
+  border: 1px solid var(--accent);
+  background: var(--surface);
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text);
+  outline: none;
+  font-family: inherit;
+  text-transform: uppercase;
+}
+.daysBlock {
+  margin-bottom: 18px;
+}
+.daysHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 5px;
+}
+.cadence {
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--accent);
+}
+.error {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--danger);
+  background: var(--danger-soft);
+  padding: 8px 11px;
+  border-radius: 9px;
+  margin-bottom: 12px;
+}
+
+/* ── Footer ────────────────────────────────────────────────────────── */
+.foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.removeBtn {
+  padding: 9px 13px;
+  border-radius: 10px;
+  border: 1px solid rgba(209, 67, 67, 0.25);
+  background: transparent;
+  color: var(--danger);
+  font-size: 12.5px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.removeBtn:hover:not(:disabled) {
+  background: var(--danger-soft);
+}
+.removeBtn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.spacer {
+  flex: 1;
+}
+.cancelBtn {
+  padding: 9px 15px;
+  border-radius: 10px;
+  border: 1px solid var(--border-2);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.cancelBtn:hover {
+  background: var(--surface-2);
+}
+.saveBtn {
+  padding: 9px 16px;
+  border-radius: 10px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.saveBtn:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+.saveBtn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}

@@ -50,6 +50,18 @@ export const VIEW_COPY: Record<ViewKey, ViewCopy> = {
     subtitle: 'Plan your days — add tasks to any date, click a task to open its details.',
     delivers: 'M2 · month grid + tasks',
   },
+  people: {
+    title: 'People & Context',
+    subtitle:
+      'Engagement cadence and living context — click a person for their full context, tap a day cell to change their plan, or add and remove people anytime.',
+    delivers: 'M4b · people & context',
+  },
+  meetings: {
+    title: 'Meeting Intelligence',
+    subtitle:
+      'Record any meeting — online or in-room. IRIS transcribes, extracts actions & decisions, and updates everyone’s context automatically.',
+    delivers: 'M4b · meeting intelligence',
+  },
   whiteboard: {
     title: 'Smart Whiteboard',
     subtitle: "Arrange files on a canvas and ask Claude to work across all of them at once.",

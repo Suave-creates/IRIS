@@ -15,7 +15,7 @@ user's connected tools, assembles ranked context, and proposes actions that
 iris/
 ├─ shared/   @iris/shared  — types, constants, the API error contract
 ├─ server/   @iris/server  — Fastify API, MySQL, migrations, context engine, connectors
-├─ web/      @iris/web      — React + Vite SPA (the design system + all 14 views)
+├─ web/      @iris/web      — React + Vite SPA (the design system + all 16 views)
 └─ .env                     — configuration & secrets (never committed)
 ```
 
@@ -55,8 +55,7 @@ npm run dev
 | `npm run lint` | ESLint across the monorepo |
 | `npm run db:migrate` | Apply pending SQL migrations |
 | `npm run db:status` | Show applied / pending migrations |
-| `npm run db:seed` | Seed a demo tenant + owner (local/password testing) |
-| `npm run db:seed:demo` | Populate demo data into any empty tenant (matches the design) |
+| `npm run db:seed` | Create a local tenant + owner account (for password sign-in testing; no content) |
 
 ## Configuration
 
@@ -67,6 +66,64 @@ See [`.env.example`](./.env.example) for the full list. Notable keys:
 - `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` — the AI / context engine
 - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — SSO **and** Google connectors (one OAuth client, incremental scopes)
 - `SESSION_SECRET`, `TOKEN_ENCRYPTION_KEY` — session signing and connector-token encryption
+
+## People & Context + Meeting Intelligence
+
+Two linked modules implement the *People & Meetings* design handoff
+(`design_handoff_extracted/design_handoff_people_meetings/`):
+
+- **People & Context** (`/people`) — an editable weekly-engagement roster.
+  Engagement (score, status, trend, last interaction) is **derived, never
+  stored**: `server/src/modules/people/people.derive.ts` ports the approved
+  prototype's algorithms verbatim (stable name hash, cadence buckets,
+  synthetic June interactions) and layers real `engagement_events` on top.
+  `GET /api/people/:id/context` returns the full drawer payload (AI relationship
+  summary, interaction calendar, timeline, topics, actions, files, insights).
+- **Meeting Intelligence** (`/meetings`) — a premium-grade pipeline:
+  - **Capture**: the recorder records real audio (MediaRecorder) on two
+    channels — your microphone, and any ongoing call's tab audio via
+    "Connect call audio" — while the browser speech engine streams a live
+    preview. Language selector covers English (India), Hindi + English
+    (code-switching) and English (US).
+  - **Transcription**: server-side **Whisper Large-v3** (local
+    `server/whisper/` Python venv, CPU int8 — accuracy over speed; the
+    browser preview is the automatic fallback). Segments are timestamped;
+    channels are merged chronologically.
+  - **Identity**: your channel carries your real name; remote segments are
+    attributed to actual people by Claude from conversational evidence plus
+    the linked Google Calendar event's live attendee list, with
+    "Unknown Speaker A/B" as the honest floor — capture labels never appear.
+    Matched people (full name → unambiguous first name → email) receive
+    engagement boosts and context memories.
+  - **Intelligence**: grounded extraction (summary, topics, actions with
+    owners/due dates, decisions, risks, follow-ups), **artifacts** actually
+    referenced (docs/repos/tickets/links — shown in the meeting and on each
+    participant's Files tab), and **carryovers** computed against the last
+    8 meetings' context. Hard anti-hallucination rules: absent → empty.
+  - `GET /api/meetings/live` detects calendar meetings happening now;
+    `DELETE /api/meetings/:id` removes a note and its engagement history.
+    A bot that *joins* calls (Gemini/Fireflies style) requires dedicated
+    meeting-bot infrastructure and remains out of scope.
+- **The link** — finalizing a recording upserts one `engagement_events` row
+  per matched participant (unique per person+meeting: re-processing replaces,
+  never stacks), mirrors the meeting onto the calendar, writes `contact`
+  memories, and feeds the context engine (`gather.ts` includes recent
+  meetings). The web layer invalidates `['people']` when the meeting mutation
+  settles, so boosts (+N pill, Rising trend, "Today", calendar dot, drawer
+  banner) appear immediately and survive reload.
+
+All dates are **live**: `server/src/lib/design-frame.ts` derives every label
+(weekdays, "Today"/"3d ago", the drawer's month calendar) from the real current
+date, and meetings are stamped with their actual start time.
+
+**No seed data.** IRIS ships without demo content: new tenants start empty and
+every view renders a proper empty state until real data arrives. People are
+added in the UI — one at a time, or in bulk via **Bulk add** on the People
+view, which parses pasted weekly-planner entries (`{n:'…', c:'Direct',
+f:'Operations', l:'BWD', d:[1,3]}`), a JSON array, or an entire planner HTML
+file, previews the parse, and imports everyone new in one request
+(`POST /api/people/bulk`; existing names are skipped). All legacy demo rows
+were purged on 2026-07-03.
 
 ## Milestones
 

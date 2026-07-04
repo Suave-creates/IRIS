@@ -12,6 +12,8 @@ import { Dashboard } from '@/views/Dashboard';
 import { Projects } from '@/views/Projects';
 import { Whiteboard } from '@/views/Whiteboard';
 import { Journal } from '@/views/Journal';
+import { People } from '@/views/People';
+import { Meetings } from '@/views/Meetings';
 import { Calendar } from '@/views/Calendar';
 import { Mail } from '@/views/Mail';
 import { Memory } from '@/views/Memory';
@@ -37,6 +39,8 @@ export const router = createBrowserRouter([
           { path: p(VIEW_PATHS.mail), element: <Mail /> },
           { path: p(VIEW_PATHS.calendar), element: <Calendar /> },
           { path: p(VIEW_PATHS.journal), element: <Journal /> },
+          { path: p(VIEW_PATHS.people), element: <People /> },
+          { path: p(VIEW_PATHS.meetings), element: <Meetings /> },
           { path: p(VIEW_PATHS.whiteboard), element: <Whiteboard /> },
           { path: p(VIEW_PATHS.knowledge), element: <Lens /> },
           { path: p(VIEW_PATHS.connectors), element: <Connectors /> },

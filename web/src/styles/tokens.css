@@ -4,9 +4,11 @@
    ────────────────────────────────────────────────────────────────────────── */
 
 :root {
-  /* Brand accent (running default from the prototype; tenant-overridable). */
+  /* Brand accent (running default from the prototype; tenant-overridable).
+     --accent-rgb MUST stay the RGB of --accent — rgba(var(--accent-rgb), …)
+     tints are used for hover borders and soft accents across the app. */
   --accent: #762fcc;
-  --accent-rgb: 75, 73, 214;
+  --accent-rgb: 118, 47, 204;
 
   /* Surfaces & text — light */
   --bg: #f4f4f2;
@@ -170,6 +172,27 @@ button {
   }
   50% {
     opacity: 0.25;
+  }
+}
+/* People & Context drawer slide-in (from the approved prototype). */
+@keyframes pcSlide {
+  from {
+    opacity: 0;
+    transform: translateX(26px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+/* Meeting recorder EQ bars (scaleY pulse; per-bar duration/delay set inline). */
+@keyframes miEq {
+  0%,
+  100% {
+    transform: scaleY(0.3);
+  }
+  50% {
+    transform: scaleY(1);
   }
 }
 

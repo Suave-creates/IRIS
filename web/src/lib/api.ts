@@ -27,6 +27,38 @@ interface RequestOptions extends Omit<RequestInit, 'body'> {
   body?: unknown;
 }
 
+/** The consistent failure thrown when the server is unreachable. */
+function networkError(): ApiError {
+  return new ApiError(0, {
+    code: 'NETWORK',
+    message: 'Could not reach the server.',
+    recovery: 'Check your connection and try again.',
+    retryable: true,
+    logRef: 'client',
+  });
+}
+
+/** Unwraps the `{ data }` envelope, mapping error bodies onto {@link ApiError}. */
+async function unwrapResponse<T>(res: Response): Promise<T> {
+  const text = await res.text();
+  const json = text ? (JSON.parse(text) as unknown) : null;
+
+  if (!res.ok) {
+    const errBody = (json as ApiErrorBody | null)?.error;
+    throw new ApiError(
+      res.status,
+      errBody ?? {
+        code: 'UNKNOWN',
+        message: 'Unexpected error.',
+        retryable: false,
+        logRef: res.headers.get('x-request-id') ?? 'unknown',
+      },
+    );
+  }
+
+  return (json as { data: T }).data;
+}
+
 /**
  * Typed fetch wrapper. Sends/receives JSON, includes session cookies, and
  * normalises every failure into an {@link ApiError} so callers (and React Query)
@@ -47,32 +79,28 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch {
-    throw new ApiError(0, {
-      code: 'NETWORK',
-      message: 'Could not reach the server.',
-      recovery: 'Check your connection and try again.',
-      retryable: true,
-      logRef: 'client',
+    throw networkError();
+  }
+  return unwrapResponse<T>(res);
+}
+
+/**
+ * Multipart POST with the same envelope/error handling as {@link apiFetch}.
+ * No Content-Type header — the browser sets the multipart boundary itself.
+ */
+export async function apiUpload<T>(path: string, form: FormData): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+      body: form,
     });
+  } catch {
+    throw networkError();
   }
-
-  const text = await res.text();
-  const json = text ? (JSON.parse(text) as unknown) : null;
-
-  if (!res.ok) {
-    const errBody = (json as ApiErrorBody | null)?.error;
-    throw new ApiError(
-      res.status,
-      errBody ?? {
-        code: 'UNKNOWN',
-        message: 'Unexpected error.',
-        retryable: false,
-        logRef: res.headers.get('x-request-id') ?? 'unknown',
-      },
-    );
-  }
-
-  return (json as { data: T }).data;
+  return unwrapResponse<T>(res);
 }
 
 export const api = {

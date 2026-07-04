@@ -59,6 +59,47 @@ export async function listDriveSources(tenantId: string, type: SourceType): Prom
   }));
 }
 
+/** A Drive file someone shared with the signed-in user. */
+export interface SharedDriveFile {
+  id: string;
+  name: string;
+  mimeType: string;
+  webViewLink: string | null;
+  /** When it was shared (ISO), else the last modification. */
+  sharedAt: string | null;
+}
+
+interface SharedListResp {
+  files?: (DriveFile & { sharedWithMeTime?: string; modifiedTime?: string })[];
+}
+
+/**
+ * Files a specific person has shared with the signed-in user (they own the
+ * file and it sits in the user's "Shared with me"), newest share first.
+ */
+export async function listFilesSharedBy(tenantId: string, email: string, pageSize = 15): Promise<SharedDriveFile[]> {
+  // The Drive query wraps the email in single quotes — strip quote/backslash
+  // characters so crafted addresses cannot alter the query.
+  const safe = email.replace(/['\\]/g, '').trim();
+  if (!safe) return [];
+  const data = await googleClient.get<SharedListResp>(
+    tenantId,
+    driveListUrl({
+      pageSize: String(pageSize),
+      orderBy: 'sharedWithMeTime desc',
+      q: `sharedWithMe = true and '${safe}' in owners and trashed = false`,
+      fields: 'files(id,name,mimeType,webViewLink,sharedWithMeTime,modifiedTime)',
+    }),
+  );
+  return (data.files ?? []).map((f) => ({
+    id: f.id,
+    name: f.name?.trim() || 'Untitled',
+    mimeType: f.mimeType,
+    webViewLink: f.webViewLink ?? null,
+    sharedAt: f.sharedWithMeTime ?? f.modifiedTime ?? null,
+  }));
+}
+
 /**
  * Patterns that extract a Drive/Docs/Sheets file ID from a pasted URL.
  * The optional `(?:u/N/)?` segment covers account-scoped links copied from the

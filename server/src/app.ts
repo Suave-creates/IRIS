@@ -1,6 +1,7 @@
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
+import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { env, isProd } from './config/env.js';
@@ -19,7 +20,9 @@ import { healthRoutes } from './modules/health/health.routes.js';
 import { journalRoutes } from './modules/journal/journal.routes.js';
 import { lensRoutes } from './modules/lens/lens.routes.js';
 import { mailRoutes } from './modules/mail/mail.routes.js';
+import { meetingsRoutes } from './modules/meetings/meetings.routes.js';
 import { memoryRoutes } from './modules/memory/memory.routes.js';
+import { peopleRoutes } from './modules/people/people.routes.js';
 import { notificationsRoutes } from './modules/notifications/notifications.routes.js';
 import { projectsRoutes } from './modules/projects/projects.routes.js';
 import { whiteboardRoutes } from './modules/whiteboard/whiteboard.routes.js';
@@ -53,6 +56,9 @@ export async function buildApp(): Promise<FastifyInstance> {
     parseOptions: { httpOnly: true, sameSite: 'lax', secure: isProd, path: '/' },
   });
 
+  // Recorder audio uploads (POST /api/meetings/audio): mic + call channels.
+  await app.register(multipart, { limits: { fileSize: 500 * 1024 * 1024, files: 2 } });
+
   await app.register(rateLimit, {
     global: true,
     max: 300,
@@ -79,6 +85,8 @@ export async function buildApp(): Promise<FastifyInstance> {
       await api.register(projectsRoutes, { prefix: '/projects' });
       await api.register(whiteboardRoutes, { prefix: '/whiteboard' });
       await api.register(journalRoutes, { prefix: '/journal' });
+      await api.register(peopleRoutes, { prefix: '/people' });
+      await api.register(meetingsRoutes, { prefix: '/meetings' });
       await api.register(calendarRoutes, { prefix: '/calendar' });
       await api.register(mailRoutes, { prefix: '/mail' });
       await api.register(memoryRoutes, { prefix: '/memory' });
