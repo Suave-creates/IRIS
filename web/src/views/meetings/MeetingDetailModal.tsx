@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import type { Meeting } from '@iris/shared';
-import { Modal } from '@/components/primitives';
+import { Modal, Spinner } from '@/components/primitives';
 import { ArrowUpRight, Check, Layers } from '@/components/icons';
 import { initials } from '@/lib/color';
-import { useDeleteMeeting, useMeetings } from '@/features/meetings/useMeetings';
+import { useDeleteMeeting, useMeeting, useMeetings } from '@/features/meetings/useMeetings';
 import { artifactTone, dayBlockColors, speakerColor } from './helpers';
 import styles from './MeetingDetailModal.module.css';
 
@@ -25,6 +25,15 @@ export function MeetingDetailModal({ meeting, onClose }: MeetingDetailModalProps
   const { data: list } = useMeetings();
   // Read live from the list cache so reprocessing reflects immediately.
   const live = list?.find((m) => m.id === meeting?.id) ?? meeting;
+  // The list omits transcript lines for speed; fetch the full meeting on demand.
+  const full = useMeeting(meeting?.id);
+  // Prefer the freshly-fetched transcript, then the meeting passed in (a just-
+  // recorded meeting arrives fully hydrated), then the (empty) list entry.
+  const transcript = full.data?.transcript?.length
+    ? full.data.transcript
+    : meeting?.transcript?.length
+      ? meeting.transcript
+      : (live?.transcript ?? []);
 
   const [tab, setTab] = useState<Tab>('summary');
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -181,7 +190,7 @@ export function MeetingDetailModal({ meeting, onClose }: MeetingDetailModalProps
               Speakers attributed by IRIS from context · timestamped · {live.durationLabel}
               {live.sttEngine === 'whisper-large-v3' ? ' · Whisper large-v3' : ''}
             </div>
-            {live.transcript.map((l, i) => (
+            {transcript.map((l, i) => (
               <div key={`${l.tsLabel}-${i}`} className={styles.tLine}>
                 <span className={styles.tTs}>{l.tsLabel}</span>
                 <span className={styles.tSpeaker} style={{ color: speakerColor(l.speaker) }}>
@@ -190,6 +199,14 @@ export function MeetingDetailModal({ meeting, onClose }: MeetingDetailModalProps
                 <span className={styles.tText}>{l.text}</span>
               </div>
             ))}
+            {transcript.length === 0 &&
+              (full.isLoading ? (
+                <div className={styles.transcriptLoading}>
+                  <Spinner size={18} />
+                </div>
+              ) : (
+                <div className={styles.transcriptLoading}>No transcript captured for this meeting.</div>
+              ))}
           </>
         )}
 

@@ -7,6 +7,25 @@
   box-shadow: var(--shadow-1);
   margin-bottom: 18px;
 }
+/* Momentary highlight when the live-meeting prompt focuses the recorder. */
+.cardFlash {
+  animation: cardFlash 1.3s ease;
+}
+@keyframes cardFlash {
+  0% {
+    box-shadow: 0 0 0 0 rgba(var(--accent-rgb), 0.5);
+    border-color: var(--accent);
+  }
+  100% {
+    box-shadow: 0 0 0 9px rgba(var(--accent-rgb), 0);
+    border-color: var(--border);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cardFlash {
+    animation: none;
+  }
+}
 .head {
   display: flex;
   align-items: center;

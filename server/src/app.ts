@@ -4,7 +4,7 @@ import helmet from '@fastify/helmet';
 import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
 import Fastify, { type FastifyInstance } from 'fastify';
-import { env, isProd } from './config/env.js';
+import { cookieSecure, env } from './config/env.js';
 import { Errors } from './lib/errors.js';
 import { loggerOptions } from './lib/logger.js';
 import { requestId } from './lib/ids.js';
@@ -53,7 +53,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await app.register(cookie, {
     secret: env.SESSION_SECRET,
-    parseOptions: { httpOnly: true, sameSite: 'lax', secure: isProd, path: '/' },
+    parseOptions: { httpOnly: true, sameSite: 'lax', secure: cookieSecure, path: '/' },
   });
 
   // Recorder audio uploads (POST /api/meetings/audio): mic + call channels.

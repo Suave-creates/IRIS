@@ -89,6 +89,12 @@ const EnvSchema = z
     // Auth
     COOKIE_NAME: z.string().default('iris_session'),
     OAUTH_COOKIE_NAME: z.string().default('iris_oauth'),
+    /**
+     * Override the `Secure` flag on session/OAuth cookies. Defaults to true in
+     * production (HTTPS). Set false for a plain-HTTP LAN deployment, or the
+     * browser drops the cookie and login silently fails.
+     */
+    COOKIE_SECURE: boolish.optional(),
     SESSION_TTL_DAYS: z.coerce.number().int().positive().default(30),
     AUTH_PASSWORD_ENABLED: boolish.default('false'),
     /** Restrict SSO sign-in to these email domains. Empty = allow any domain. */
@@ -145,6 +151,12 @@ export const env: Env = parseEnv();
 
 export const isProd = env.NODE_ENV === 'production';
 export const isDev = env.NODE_ENV === 'development';
+
+/**
+ * Whether auth cookies carry the `Secure` flag. HTTPS-only in production by
+ * default; `COOKIE_SECURE=false` relaxes it for plain-HTTP LAN deployments.
+ */
+export const cookieSecure = env.COOKIE_SECURE ?? isProd;
 
 /** True when a Google OAuth client is configured (gates SSO + Google connectors). */
 export const hasGoogleOAuth = Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);

@@ -296,6 +296,8 @@ export interface RecordingInput {
   transcript: RecordingTranscriptLine[];
   /** Title of the detected calendar meeting this recording belongs to, if any. */
   titleHint?: string | null;
+  /** Participant names known up front (calendar attendees or extension-scraped) — AI attribution candidates. */
+  attendeeNames?: string[];
 }
 
 /** A calendar meeting happening right now (drives the "meeting detected" banner). */

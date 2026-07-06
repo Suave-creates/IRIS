@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "IRIS Meeting Capture",
+  "version": "0.1.0",
+  "description": "Detects live meetings (Google Meet, Zoom, Teams) and lets you track & record them in IRIS — including ad-hoc calls that aren't on your calendar.",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://meet.google.com/*",
+    "https://*.zoom.us/*",
+    "https://teams.microsoft.com/*",
+    "https://teams.live.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://meet.google.com/*",
+        "https://*.zoom.us/*",
+        "https://teams.microsoft.com/*",
+        "https://teams.live.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": false
+  },
+  "action": {
+    "default_title": "IRIS Meeting Capture",
+    "default_popup": "options.html"
+  }
+}

@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { env, hasGoogleOAuth, isProd } from '../../config/env.js';
+import { cookieSecure, env, hasGoogleOAuth } from '../../config/env.js';
 import { Errors } from '../../lib/errors.js';
 import { auditService } from '../audit/audit.service.js';
 import { authService } from './auth.service.js';
@@ -16,7 +16,7 @@ import { toSessionUser, type UserRow } from './types.js';
 const OAUTH_COOKIE_OPTS = {
   httpOnly: true,
   sameSite: 'lax' as const,
-  secure: isProd,
+  secure: cookieSecure,
   path: '/api/auth',
   signed: true,
   maxAge: 600, // 10 minutes

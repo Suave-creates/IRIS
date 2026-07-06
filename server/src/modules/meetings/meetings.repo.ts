@@ -257,9 +257,13 @@ export const meetingsRepo = {
   },
 
   /**
-   * Lists the tenant's meetings, fully hydrated, newest first. An optional
-   * keyword filters case-insensitively across title, summary and the JSON
-   * text of topics + participants.
+   * Lists the tenant's meetings for the list view, newest first. Actions and
+   * decisions come along (the rows + Actions tab need them), but NOT transcript
+   * lines — those can run to hundreds per meeting and are only shown in the
+   * modal's Transcript tab, which fetches the full meeting via getById on
+   * demand. Keeping transcripts out of the list keeps the payload small and the
+   * view fast as meetings accumulate. Optional keyword filters case-insensitively
+   * across title, summary and the JSON text of topics + participants.
    */
   async listByTenant(tenantId: string, q?: string): Promise<Meeting[]> {
     const params: Record<string, unknown> = { t: tenantId };
@@ -284,9 +288,9 @@ export const meetingsRepo = {
       childParams[`m${i}`] = mid;
     });
 
-    // Batch-load all children for this tenant's meetings in one round-trip each.
-    const [transcripts, actions, decisions] = await Promise.all([
-      query<TranscriptRow[]>(`SELECT * FROM meeting_transcripts WHERE meeting_id IN (${placeholders}) ORDER BY position, id`, childParams),
+    // Batch-load actions + decisions for this tenant's meetings (one round-trip
+    // each). Transcripts are intentionally omitted — see the doc comment.
+    const [actions, decisions] = await Promise.all([
       query<ActionRow[]>(`SELECT * FROM meeting_actions WHERE meeting_id IN (${placeholders}) ORDER BY position, id`, childParams),
       query<DecisionRow[]>(`SELECT * FROM meeting_decisions WHERE meeting_id IN (${placeholders}) ORDER BY position, id`, childParams),
     ]);
@@ -300,13 +304,12 @@ export const meetingsRepo = {
       }
       return m;
     };
-    const transcriptsMap = byMeeting(transcripts);
     const actionsMap = byMeeting(actions);
     const decisionsMap = byMeeting(decisions);
 
     return meetings.map((m) =>
       toMeeting(m, {
-        transcripts: transcriptsMap.get(m.id) ?? [],
+        transcripts: [],
         actions: actionsMap.get(m.id) ?? [],
         decisions: decisionsMap.get(m.id) ?? [],
       }),

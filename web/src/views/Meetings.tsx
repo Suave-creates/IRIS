@@ -1,19 +1,89 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import type { Meeting } from '@iris/shared';
 import { Spinner } from '@/components/primitives';
 import { Search } from '@/components/icons';
 import { useLiveMeetings, useMeetings } from '@/features/meetings/useMeetings';
 import { VIEW_COPY } from './copy';
-import { SENTIMENT_COLORS, SUGGESTIONS, dayBlockColors, matchScore } from './meetings/helpers';
+import { adhocLiveMeeting, SENTIMENT_COLORS, SUGGESTIONS, dayBlockColors, livePromptMeeting, matchScore } from './meetings/helpers';
 import { Recorder } from './meetings/Recorder';
+import { LiveMeetingPrompt } from './meetings/LiveMeetingPrompt';
 import { MeetingDetailModal } from './meetings/MeetingDetailModal';
 import styles from './Meetings.module.css';
+
+/** Session-scoped record of live-meeting prompts the user has already dealt with. */
+const DISMISS_KEY = 'iris.meetings.dismissedLive';
+
+function readDismissed(): Set<string> {
+  try {
+    const raw = sessionStorage.getItem(DISMISS_KEY);
+    if (raw) return new Set(JSON.parse(raw) as string[]);
+  } catch {
+    /* private mode / bad JSON — start fresh */
+  }
+  return new Set();
+}
 
 export function Meetings() {
   const meetings = useMeetings();
   const liveMeetings = useLiveMeetings();
   const [query, setQuery] = useState('');
   const [openMeeting, setOpenMeeting] = useState<Meeting | null>(null);
+
+  // Live-meeting auto-prompt: which meetings the user has dealt with, whether a
+  // recording is underway, and a counter that focuses the recorder on demand.
+  const [dismissed, setDismissed] = useState<Set<string>>(readDismissed);
+  const [recorderBusy, setRecorderBusy] = useState(false);
+  const [focusSignal, setFocusSignal] = useState(0);
+
+  // Ad-hoc meeting handed off by the IRIS Meeting Capture browser extension
+  // (?adhoc=1&title=…&start=…&code=…&platform=…). It stands in for a calendar
+  // meeting so an off-calendar Meet/Zoom/Teams call drives the same prompt.
+  const [searchParams] = useSearchParams();
+  const adhoc = useMemo(
+    () =>
+      adhocLiveMeeting(
+        {
+          adhoc: searchParams.get('adhoc'),
+          title: searchParams.get('title'),
+          start: searchParams.get('start'),
+          code: searchParams.get('code'),
+          platform: searchParams.get('platform'),
+          people: searchParams.get('people'),
+        },
+        new Date().toISOString(),
+      ),
+    [searchParams],
+  );
+
+  // An ad-hoc call from the extension wins; otherwise the soonest synced live meeting.
+  const primaryLive = adhoc ?? liveMeetings.data?.[0] ?? null;
+  const promptMeeting = livePromptMeeting(primaryLive, dismissed, recorderBusy);
+
+  const dismiss = useCallback((id: string) => {
+    setDismissed((prev) => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      try {
+        sessionStorage.setItem(DISMISS_KEY, JSON.stringify([...next]));
+      } catch {
+        /* private mode — keep the in-memory set */
+      }
+      return next;
+    });
+  }, []);
+
+  // Recording via the recorder's own Start button also retires the prompt for
+  // that meeting, so it never re-pops once the meeting has been captured.
+  useEffect(() => {
+    if (recorderBusy && primaryLive) dismiss(primaryLive.id);
+  }, [recorderBusy, primaryLive, dismiss]);
+
+  const focusRecorder = () => {
+    if (primaryLive) dismiss(primaryLive.id);
+    setFocusSignal((n) => n + 1);
+  };
 
   const all = meetings.data ?? [];
   const q = query.trim();
@@ -33,7 +103,21 @@ export function Meetings() {
         <p className={styles.subtitle}>{VIEW_COPY.meetings.subtitle}</p>
       </header>
 
-      <Recorder onViewMeeting={setOpenMeeting} liveMeeting={liveMeetings.data?.[0] ?? null} />
+      {promptMeeting && (
+        <LiveMeetingPrompt
+          meeting={promptMeeting}
+          onRecord={focusRecorder}
+          onDismiss={() => dismiss(promptMeeting.id)}
+        />
+      )}
+
+      <Recorder
+        onViewMeeting={setOpenMeeting}
+        liveMeeting={primaryLive}
+        focusSignal={focusSignal}
+        hideLiveBanner={!!promptMeeting}
+        onActiveChange={setRecorderBusy}
+      />
 
       {meetings.isLoading ? (
         <div className={styles.listLoading}>

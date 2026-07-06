@@ -1,0 +1,35 @@
+# IRIS — two services: the Fastify+Whisper API and an nginx edge serving the SPA.
+# The database is EXTERNAL (DB_HOST in .env, e.g. 192.168.27.157) and reached
+# over the LAN; Docker Desktop routes to LAN IPs directly.
+#
+#   Build + run:   docker compose up -d --build
+#   Logs:          docker compose logs -f server
+#   Stop:          docker compose down
+#
+# Create .env from .env.deploy.example first.
+
+services:
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: iris-server:latest
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      PORT: "8080"
+    expose:
+      - "8080"
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    image: iris-web:latest
+    depends_on:
+      - server
+    ports:
+      # Host 80 → nginx. Reach IRIS at http://192.168.27.170
+      - "80:80"
+    restart: unless-stopped

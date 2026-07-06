@@ -39,11 +39,14 @@ const transcriptLineSchema = z.object({
   text: z.string().trim().min(1).max(2000),
 });
 
+const attendeeNamesSchema = z.array(z.string().trim().min(1).max(120)).max(50);
+
 const recordingSchema = z.object({
   mode: z.enum(MEETING_MODES),
   durationSecs: z.number().int().min(0).max(86400),
   transcript: z.array(transcriptLineSchema).min(1).max(500),
   titleHint: z.string().trim().max(255).nullish(),
+  attendeeNames: attendeeNamesSchema.optional(),
 });
 
 /** Non-file fields of the multipart POST /audio body (all arrive as strings). */
@@ -53,6 +56,8 @@ const audioFieldsSchema = z.object({
   titleHint: z.string().trim().max(255).optional(),
   language: z.string().trim().max(16).optional(),
   calendarEventId: z.string().trim().max(64).optional(),
+  /** JSON array of participant names (calendar attendees / extension-scraped). */
+  attendeeNames: z.string().max(8000).optional(),
   preview: z.string().max(2_000_000).optional(),
 });
 
@@ -365,7 +370,7 @@ export async function meetingsRoutes(app: FastifyInstance): Promise<void> {
       durationSecs: body.durationSecs,
       transcript: body.transcript,
       titleHint: body.titleHint ?? null,
-      attendeeNames: [],
+      attendeeNames: body.attendeeNames ?? [],
       sttEngine: 'browser-speech',
     });
     return { data };
@@ -435,9 +440,23 @@ export async function meetingsRoutes(app: FastifyInstance): Promise<void> {
         throw Errors.validation('No speech could be transcribed from the recording.');
       }
 
-      // Linked calendar event → title hint + live attendee candidates.
+      // Attribution candidates: names the client already knows (calendar
+      // attendees or extension-scraped participants) merged with the live Google
+      // attendees of any linked event. De-duplicated case-insensitively.
       let titleHint = body.titleHint?.trim() || null;
-      let attendeeNames: string[] = [];
+      const nameByKey = new Map<string, string>();
+      const addName = (raw: string | null | undefined): void => {
+        const name = (raw ?? '').trim().slice(0, 120);
+        if (name && !nameByKey.has(name.toLowerCase())) nameByKey.set(name.toLowerCase(), name);
+      };
+      if (body.attendeeNames) {
+        try {
+          const parsed = attendeeNamesSchema.parse(JSON.parse(body.attendeeNames));
+          parsed.forEach(addName);
+        } catch (err) {
+          logger.warn({ err }, 'unparseable attendeeNames on /audio — ignoring');
+        }
+      }
       if (body.calendarEventId) {
         const rows = await query<CalendarEventLookupRow[]>(
           'SELECT id, title, google_event_id FROM calendar_events WHERE id = :id AND tenant_id = :t',
@@ -448,10 +467,11 @@ export async function meetingsRoutes(app: FastifyInstance): Promise<void> {
           if (!titleHint) titleHint = event.title;
           if (event.google_event_id) {
             const attendees = await getEventAttendees(me.tenantId, event.google_event_id);
-            attendeeNames = attendees.map((a) => a.name ?? a.email);
+            attendees.forEach((a) => addName(a.name ?? a.email));
           }
         }
       }
+      const attendeeNames = [...nameByKey.values()].slice(0, 50);
 
       const data = await processRecording(me, {
         mode: body.mode,

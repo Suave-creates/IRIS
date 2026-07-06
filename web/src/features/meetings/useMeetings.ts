@@ -4,9 +4,26 @@ import { meetingsApi } from './api';
 
 export const meetingsKey = ['meetings'] as const;
 
-/** The list is fully hydrated; search filters it client-side for instant results. */
+/**
+ * The list carries everything the rows + summary/actions/context tabs need, but
+ * NOT transcript lines (kept out server-side to stay fast). Search filters it
+ * client-side for instant results.
+ */
 export function useMeetings() {
   return useQuery({ queryKey: meetingsKey, queryFn: () => meetingsApi.list() });
+}
+
+/**
+ * Full detail for one meeting — including the transcript the list omits. The
+ * modal uses this to load the Transcript tab on demand.
+ */
+export function useMeeting(id: string | null | undefined) {
+  return useQuery({
+    queryKey: ['meeting', id] as const,
+    queryFn: () => meetingsApi.get(id!),
+    enabled: !!id,
+    staleTime: 60_000,
+  });
 }
 
 /**

@@ -4,7 +4,7 @@ import { ProgressBar, Spinner } from '@/components/primitives';
 import { Check } from '@/components/icons';
 import { ApiError } from '@/lib/api';
 import { useProcessAudioRecording, useProcessRecording } from '@/features/meetings/useMeetings';
-import { PIPELINE_STEPS, fmtMmss, speakerColor, sttLanguage } from './helpers';
+import { PIPELINE_STEPS, browserRecognitionLocale, fmtMmss, speakerColor, sttLanguage } from './helpers';
 import styles from './Recorder.module.css';
 
 type Phase = 'idle' | 'recording' | 'processing' | 'done';
@@ -24,8 +24,14 @@ interface FeedLine {
  */
 const MIC_ONLY_LABEL = 'Mic';
 
-/** Recognition languages (the browser engine handles code-switching within each). */
+/**
+ * Recognition languages. 'auto' is the default: the server's Whisper pass
+ * auto-detects Hindi vs English per recording, and the live preview listens in
+ * hi-IN (which handles mixed Hindi + English). The explicit locales below stay
+ * as manual overrides for anyone who wants to pin one.
+ */
 const LANGS: readonly { code: string; label: string }[] = [
+  { code: 'auto', label: 'Auto · Hindi + English' },
   { code: 'en-IN', label: 'English (India)' },
   { code: 'hi-IN', label: 'हिन्दी + English' },
   { code: 'en-US', label: 'English (US)' },
@@ -130,6 +136,12 @@ export interface RecorderProps {
   onViewMeeting: (m: Meeting) => void;
   /** A calendar meeting detected as happening right now (drives the banner + title). */
   liveMeeting: LiveMeeting | null;
+  /** Bumped by the parent to scroll the recorder into view and flash it — never auto-starts. */
+  focusSignal?: number;
+  /** Suppress the built-in live banner when the parent is showing its own prompt for the same meeting. */
+  hideLiveBanner?: boolean;
+  /** Reports whether a recording is underway (recording or processing phase). */
+  onActiveChange?: (active: boolean) => void;
 }
 
 /**
@@ -137,7 +149,7 @@ export interface RecorderProps {
  * Chrome/Edge) → real AI extraction on the server. Four phases: idle →
  * recording (live transcript, pause/resume) → processing → done.
  */
-export function Recorder({ onViewMeeting, liveMeeting }: RecorderProps) {
+export function Recorder({ onViewMeeting, liveMeeting, focusSignal, hideLiveBanner, onActiveChange }: RecorderProps) {
   const [mode, setMode] = useState<MeetingMode>('inroom');
   const [phase, setPhase] = useState<Phase>('idle');
   const [secs, setSecs] = useState(0);
@@ -148,13 +160,15 @@ export function Recorder({ onViewMeeting, liveMeeting }: RecorderProps) {
   const [micError, setMicError] = useState<string | null>(null);
   const [lang, setLang] = useState<string>(() => {
     try {
-      return localStorage.getItem(LANG_STORAGE_KEY) ?? 'en-IN';
+      return localStorage.getItem(LANG_STORAGE_KEY) ?? 'auto';
     } catch {
-      return 'en-IN';
+      return 'auto';
     }
   });
   const [callConnected, setCallConnected] = useState(false);
   const [callActive, setCallActive] = useState(false);
+  // Brief highlight when the parent's live-meeting prompt focuses the recorder.
+  const [flash, setFlash] = useState(false);
 
   // Refs mirror ticking state so intervals/handlers read current values.
   const secsRef = useRef(0);
@@ -166,6 +180,9 @@ export function Recorder({ onViewMeeting, liveMeeting }: RecorderProps) {
   const formRef = useRef<FormData | null>(null);
   const titleHintRef = useRef<string | null>(null);
   const calendarEventIdRef = useRef<string | null>(null);
+  // Participant names known before processing (calendar attendees / extension-scraped);
+  // sent to the server as AI attribution candidates so the other side gets a name.
+  const attendeeNamesRef = useRef<string[]>([]);
   // Real audio capture: one recorder for the mic, one for the call tab (when connected).
   const micRecorderRef = useRef<MediaRecorder | null>(null);
   const callRecorderRef = useRef<MediaRecorder | null>(null);
@@ -174,6 +191,8 @@ export function Recorder({ onViewMeeting, liveMeeting }: RecorderProps) {
   /** Mic stream acquired just for recording (only when no monitor stream exists). */
   const recMicStreamRef = useRef<MediaStream | null>(null);
   const feedRef = useRef<HTMLDivElement | null>(null);
+  const cardRef = useRef<HTMLElement | null>(null);
+  const flashTimerRef = useRef<number | null>(null);
   const langRef = useRef(lang);
   // Channel diarization: peak voice energy per channel since the last finalized line.
   const displayStreamRef = useRef<MediaStream | null>(null);
@@ -206,6 +225,23 @@ export function Recorder({ onViewMeeting, liveMeeting }: RecorderProps) {
     const el = feedRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [lines.length, interim]);
+
+  // Parent bumped focusSignal (from the live-meeting prompt): bring the recorder
+  // into view and flash it, but never start recording — the user still taps Start.
+  useEffect(() => {
+    if (!focusSignal) return;
+    cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setFlash(true);
+    flashTimerRef.current = window.setTimeout(() => setFlash(false), 1300);
+    return () => {
+      if (flashTimerRef.current !== null) window.clearTimeout(flashTimerRef.current);
+    };
+  }, [focusSignal]);
+
+  // Let the parent hide its prompt while a recording is being captured or processed.
+  useEffect(() => {
+    onActiveChange?.(phase === 'recording' || phase === 'processing');
+  }, [phase, onActiveChange]);
 
   /** Stops audio-level monitoring and releases the captured call/mic streams. */
   const teardownCallAudio = () => {
@@ -390,7 +426,7 @@ export function Recorder({ onViewMeeting, liveMeeting }: RecorderProps) {
     const recognition = new Ctor();
     recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.lang = langRef.current;
+    recognition.lang = browserRecognitionLocale(langRef.current);
     recognition.onresult = (e) => {
       let pending = '';
       for (let i = e.resultIndex; i < e.results.length; i++) {
@@ -446,6 +482,7 @@ export function Recorder({ onViewMeeting, liveMeeting }: RecorderProps) {
     formRef.current = null;
     titleHintRef.current = liveMeeting?.title ?? null;
     calendarEventIdRef.current = liveMeeting?.id ?? null;
+    attendeeNamesRef.current = liveMeeting?.attendeeNames ?? [];
     setSecs(0);
     setPaused(false);
     setLines([]);
@@ -508,6 +545,7 @@ export function Recorder({ onViewMeeting, liveMeeting }: RecorderProps) {
       if (titleHintRef.current) form.append('titleHint', titleHintRef.current);
       form.append('language', sttLanguage(langRef.current));
       if (calendarEventIdRef.current) form.append('calendarEventId', calendarEventIdRef.current);
+      if (attendeeNamesRef.current.length) form.append('attendeeNames', JSON.stringify(attendeeNamesRef.current));
       form.append('preview', JSON.stringify(transcript));
       formRef.current = form;
       payloadRef.current = null;
@@ -521,7 +559,13 @@ export function Recorder({ onViewMeeting, liveMeeting }: RecorderProps) {
       setPhase('idle');
       return;
     }
-    const payload: RecordingInput = { mode, durationSecs, transcript, titleHint: titleHintRef.current };
+    const payload: RecordingInput = {
+      mode,
+      durationSecs,
+      transcript,
+      titleHint: titleHintRef.current,
+      attendeeNames: attendeeNamesRef.current,
+    };
     payloadRef.current = payload;
     formRef.current = null;
     processRecording.mutate(payload);
@@ -573,6 +617,7 @@ export function Recorder({ onViewMeeting, liveMeeting }: RecorderProps) {
     formRef.current = null;
     titleHintRef.current = null;
     calendarEventIdRef.current = null;
+    attendeeNamesRef.current = [];
     teardownAudioCapture();
     setPhase('idle');
     setSecs(0);
@@ -595,7 +640,7 @@ export function Recorder({ onViewMeeting, liveMeeting }: RecorderProps) {
   const procPct = Math.min(100, Math.round((stepIdx / PIPELINE_STEPS.length) * 100));
 
   return (
-    <section className={styles.card}>
+    <section ref={cardRef} className={`${styles.card} ${flash ? styles.cardFlash : ''}`}>
       {/* ── Header: title + status hint + mode segmented control ── */}
       <div className={styles.head}>
         <div className={styles.headLeft}>
@@ -608,7 +653,7 @@ export function Recorder({ onViewMeeting, liveMeeting }: RecorderProps) {
             value={lang}
             onChange={(e) => pickLang(e.target.value)}
             aria-label="Transcription language"
-            title="Transcription language — Hindi + English handles mixed speech"
+            title="Transcription language — Auto detects Hindi vs English per recording; pick a locale to pin one"
           >
             {LANGS.map((l) => (
               <option key={l.code} value={l.code}>
@@ -636,7 +681,7 @@ export function Recorder({ onViewMeeting, liveMeeting }: RecorderProps) {
       </div>
 
       {/* ── Detected live meeting (from the synced calendar) ── */}
-      {phase === 'idle' && liveMeeting && (
+      {phase === 'idle' && liveMeeting && !hideLiveBanner && (
         <div className={styles.liveBanner}>
           <span className={styles.liveDot} />
           <span className={styles.liveText}>

@@ -1,6 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import type { Meeting } from '@iris/shared';
-import { alpha, artifactTone, fmtMmss, matchScore, matchesQuery, sttLanguage } from './helpers';
+import type { LiveMeeting, Meeting } from '@iris/shared';
+import {
+  adhocLiveMeeting,
+  alpha,
+  artifactTone,
+  browserRecognitionLocale,
+  fmtMmss,
+  livePromptMeeting,
+  livePromptTiming,
+  matchScore,
+  matchesQuery,
+  parseAdhocPeople,
+  sttLanguage,
+} from './helpers';
 
 const meeting: Meeting = {
   id: 'm2',
@@ -106,6 +118,10 @@ describe('artifactTone', () => {
 });
 
 describe('sttLanguage', () => {
+  it('passes auto through so the server lets Whisper detect the language', () => {
+    expect(sttLanguage('auto')).toBe('auto');
+    expect(sttLanguage(' AUTO ')).toBe('auto');
+  });
   it('maps hindi locales to hi', () => {
     expect(sttLanguage('hi-IN')).toBe('hi');
   });
@@ -116,6 +132,131 @@ describe('sttLanguage', () => {
   it('defaults unknown locales to en', () => {
     expect(sttLanguage('fr-FR')).toBe('en');
     expect(sttLanguage('')).toBe('en');
+  });
+});
+
+describe('browserRecognitionLocale', () => {
+  it('maps auto to en-IN so English is not mis-scripted into Devanagari', () => {
+    expect(browserRecognitionLocale('auto')).toBe('en-IN');
+    expect(browserRecognitionLocale(' Auto ')).toBe('en-IN');
+  });
+  it('passes explicit locales through unchanged (hi-IN stays for Hindi-dominant calls)', () => {
+    expect(browserRecognitionLocale('en-US')).toBe('en-US');
+    expect(browserRecognitionLocale('hi-IN')).toBe('hi-IN');
+  });
+});
+
+describe('livePromptMeeting', () => {
+  const live: LiveMeeting = {
+    id: 'evt1',
+    title: 'Q3 Board Review',
+    startAt: '2026-07-06T09:00:00.000Z',
+    endAt: '2026-07-06T10:00:00.000Z',
+    location: 'Room 4',
+    attendees: 9,
+    attendeeNames: [],
+    googleEventId: null,
+  };
+
+  it('surfaces the current live meeting when nothing blocks it', () => {
+    expect(livePromptMeeting(live, new Set(), false)).toBe(live);
+  });
+  it('shows nothing when there is no live meeting', () => {
+    expect(livePromptMeeting(null, new Set(), false)).toBeNull();
+  });
+  it('shows nothing once the meeting has been dismissed', () => {
+    expect(livePromptMeeting(live, new Set(['evt1']), false)).toBeNull();
+  });
+  it('shows nothing while a recording is underway', () => {
+    expect(livePromptMeeting(live, new Set(), true)).toBeNull();
+  });
+});
+
+describe('livePromptTiming', () => {
+  const now = Date.parse('2026-07-06T09:00:00.000Z');
+
+  it('reads as starting now within a minute either side', () => {
+    expect(livePromptTiming('2026-07-06T09:00:00.000Z', now)).toBe('Starting now');
+    expect(livePromptTiming('2026-07-06T09:00:20.000Z', now)).toBe('Starting now');
+    expect(livePromptTiming('2026-07-06T08:59:40.000Z', now)).toBe('Starting now');
+  });
+  it('counts up an upcoming start', () => {
+    expect(livePromptTiming('2026-07-06T09:04:00.000Z', now)).toBe('Starts in 4 min');
+  });
+  it('counts up a meeting already in progress', () => {
+    expect(livePromptTiming('2026-07-06T08:50:00.000Z', now)).toBe('Started 10 min ago');
+  });
+  it('falls back to starting now on an unparseable date', () => {
+    expect(livePromptTiming('not-a-date', now)).toBe('Starting now');
+  });
+});
+
+describe('adhocLiveMeeting', () => {
+  const nowIso = '2026-07-06T09:00:00.000Z';
+
+  it('returns null when the adhoc flag is absent or falsy', () => {
+    expect(adhocLiveMeeting({}, nowIso)).toBeNull();
+    expect(adhocLiveMeeting({ adhoc: '0' }, nowIso)).toBeNull();
+    expect(adhocLiveMeeting({ adhoc: 'false' }, nowIso)).toBeNull();
+  });
+
+  it('synthesizes a live meeting from extension params', () => {
+    const m = adhocLiveMeeting(
+      { adhoc: '1', title: 'iRIS TESTING', start: nowIso, code: 'abc-defg-hij', platform: 'meet' },
+      nowIso,
+    );
+    expect(m).not.toBeNull();
+    expect(m!.title).toBe('iRIS TESTING');
+    expect(m!.id).toBe('adhoc:abc-defg-hij');
+    expect(m!.startAt).toBe(nowIso);
+    expect(m!.location).toBe('Google Meet');
+    // Default one-hour window so it reads as "in progress" for a while.
+    expect(m!.endAt).toBe('2026-07-06T10:00:00.000Z');
+    expect(m!.googleEventId).toBeNull();
+  });
+
+  it('defaults the title and start, and labels known platforms', () => {
+    const m = adhocLiveMeeting({ adhoc: '1', platform: 'zoom' }, nowIso);
+    expect(m!.title).toBe('Live meeting');
+    expect(m!.startAt).toBe(nowIso);
+    expect(m!.location).toBe('Zoom');
+  });
+
+  it('ignores an unparseable start and uses now instead', () => {
+    const m = adhocLiveMeeting({ adhoc: '1', start: 'nope', platform: 'teams' }, nowIso);
+    expect(m!.startAt).toBe(nowIso);
+    expect(m!.endAt).toBe('2026-07-06T10:00:00.000Z');
+    expect(m!.location).toBe('Microsoft Teams');
+  });
+
+  it('keys the id off the title when no code is supplied', () => {
+    const m = adhocLiveMeeting({ adhoc: '1', title: 'Strategy sync' }, nowIso);
+    expect(m!.id).toBe('adhoc:Strategy sync');
+    expect(m!.location).toBeNull();
+  });
+
+  it('carries scraped participant names through as attendee candidates', () => {
+    const m = adhocLiveMeeting(
+      { adhoc: '1', title: 'Office', platform: 'meet', people: 'Arya Khadgi|Aman Pathak' },
+      nowIso,
+    );
+    expect(m!.attendeeNames).toEqual(['Arya Khadgi', 'Aman Pathak']);
+    expect(m!.attendees).toBe(2);
+  });
+});
+
+describe('parseAdhocPeople', () => {
+  it('returns [] for empty/absent input', () => {
+    expect(parseAdhocPeople(null)).toEqual([]);
+    expect(parseAdhocPeople(undefined)).toEqual([]);
+    expect(parseAdhocPeople('')).toEqual([]);
+  });
+  it('splits on both pipe and comma and trims', () => {
+    expect(parseAdhocPeople('Arya Khadgi | Aman Pathak')).toEqual(['Arya Khadgi', 'Aman Pathak']);
+    expect(parseAdhocPeople('Raj Pandey, Krishan')).toEqual(['Raj Pandey', 'Krishan']);
+  });
+  it('de-duplicates case-insensitively and drops blanks', () => {
+    expect(parseAdhocPeople('Aman|aman| |Aman Pathak')).toEqual(['Aman', 'Aman Pathak']);
   });
 });
 
