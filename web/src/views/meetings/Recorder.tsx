@@ -3,9 +3,14 @@ import type { LiveMeeting, Meeting, MeetingMode, RecordingInput, RecordingTransc
 import { ProgressBar, Spinner } from '@/components/primitives';
 import { Check } from '@/components/icons';
 import { ApiError } from '@/lib/api';
+import { meetingsApi } from '@/features/meetings/api';
 import { useProcessAudioRecording, useProcessRecording } from '@/features/meetings/useMeetings';
 import { PIPELINE_STEPS, browserRecognitionLocale, fmtMmss, speakerColor, sttLanguage } from './helpers';
+import { startLiveTranscription, type LiveTranscriptionHandle } from './liveTranscribe';
 import styles from './Recorder.module.css';
+
+/** Length of each near-real-time transcription segment sent to Gemini. */
+const LIVE_CHUNK_MS = 12_000;
 
 type Phase = 'idle' | 'recording' | 'processing' | 'done';
 
@@ -183,6 +188,9 @@ export function Recorder({ onViewMeeting, liveMeeting, focusSignal, hideLiveBann
   // Participant names known before processing (calendar attendees / extension-scraped);
   // sent to the server as AI attribution candidates so the other side gets a name.
   const attendeeNamesRef = useRef<string[]>([]);
+  // Near-real-time live transcription (separate from the full-audio recorders).
+  const liveHandleRef = useRef<LiveTranscriptionHandle | null>(null);
+  const liveMicStreamRef = useRef<MediaStream | null>(null);
   // Real audio capture: one recorder for the mic, one for the call tab (when connected).
   const micRecorderRef = useRef<MediaRecorder | null>(null);
   const callRecorderRef = useRef<MediaRecorder | null>(null);
@@ -279,6 +287,9 @@ export function Recorder({ onViewMeeting, liveMeeting, focusSignal, hideLiveBann
 
   /** Abandons the audio recorders and releases the recording-only mic stream. */
   const teardownAudioCapture = () => {
+    liveHandleRef.current?.stop();
+    liveHandleRef.current = null;
+    liveMicStreamRef.current = null;
     for (const rec of [micRecorderRef.current, callRecorderRef.current]) {
       try {
         if (rec && rec.state !== 'inactive') rec.stop();
@@ -333,6 +344,11 @@ export function Recorder({ onViewMeeting, liveMeeting, focusSignal, hideLiveBann
       };
       micRec.start(RECORDER_TIMESLICE_MS);
       micRecorderRef.current = micRec;
+
+      // Near-real-time preview: segmenting recorder on the same mic stream feeds
+      // Gemini every ~12s so the transcript fills in live. Best-effort; the
+      // definitive transcript still comes from the full-audio pass on stop.
+      startLive(micStream);
 
       const callTracks = displayStreamRef.current?.getAudioTracks() ?? [];
       if (callConnectedRef.current && callTracks.length > 0) {
@@ -429,7 +445,42 @@ export function Recorder({ onViewMeeting, liveMeeting, focusSignal, hideLiveBann
     setLines(linesRef.current);
   };
 
-  /** Starts (or restarts) the browser speech recognizer. */
+  /** Appends a confirmed line from the near-real-time Gemini feed. */
+  const appendChunkLine = (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    const line: FeedLine = {
+      tsSecs: secsRef.current,
+      tsLabel: fmtMmss(secsRef.current),
+      speaker: 'Live',
+      text: trimmed,
+    };
+    linesRef.current = [...linesRef.current, line];
+    setLines(linesRef.current);
+    setInterim('');
+  };
+
+  /** (Re)starts near-real-time Gemini transcription on the given mic stream. */
+  const startLive = (stream: MediaStream) => {
+    const mimeType = recorderMimeType();
+    if (!mimeType) return;
+    liveMicStreamRef.current = stream;
+    liveHandleRef.current?.stop();
+    liveHandleRef.current = startLiveTranscription({
+      stream,
+      mimeType,
+      intervalMs: LIVE_CHUNK_MS,
+      transcribe: meetingsApi.transcribeChunk,
+      onText: appendChunkLine,
+    });
+  };
+
+  const stopLive = () => {
+    liveHandleRef.current?.stop();
+    liveHandleRef.current = null;
+  };
+
+  /** Starts (or restarts) the browser speech recognizer (instant rough interim only). */
   const startRecognition = () => {
     const Ctor = speechRecognitionCtor();
     if (!Ctor) return;
@@ -438,11 +489,11 @@ export function Recorder({ onViewMeeting, liveMeeting, focusSignal, hideLiveBann
     recognition.interimResults = true;
     recognition.lang = browserRecognitionLocale(langRef.current);
     recognition.onresult = (e) => {
+      // Interim-only: the browser engine drives the instant rough caption; the
+      // confirmed transcript lines come from the accurate Gemini live feed.
       let pending = '';
       for (let i = e.resultIndex; i < e.results.length; i++) {
-        const res = e.results[i]!;
-        if (res.isFinal) appendLine(res[0].transcript);
-        else pending += res[0].transcript;
+        pending += e.results[i]![0].transcript;
       }
       setInterim(pending.trim());
     };
@@ -517,9 +568,11 @@ export function Recorder({ onViewMeeting, liveMeeting, focusSignal, hideLiveBann
     }
     if (next) {
       recognitionRef.current?.stop();
+      stopLive();
       setInterim('');
     } else {
       startRecognition();
+      if (liveMicStreamRef.current) startLive(liveMicStreamRef.current);
     }
   };
 
@@ -584,6 +637,7 @@ export function Recorder({ onViewMeeting, liveMeeting, focusSignal, hideLiveBann
   const stopAndProcess = () => {
     stoppingRef.current = true;
     recognitionRef.current?.stop();
+    stopLive();
     // Whatever is still interim belongs to the recording.
     if (interim.trim()) appendLine(interim);
     setInterim('');
@@ -754,8 +808,8 @@ export function Recorder({ onViewMeeting, liveMeeting, focusSignal, hideLiveBann
               {paused
                 ? 'Paused — nothing is being captured'
                 : callConnected
-                  ? 'Recording · mic + call audio · you vs call auto-split'
-                  : 'Recording · transcribing your microphone live'}
+                  ? 'Recording · mic + call audio · live transcript every few seconds'
+                  : 'Recording · live transcript fills in every few seconds'}
             </span>
             <div className={styles.recActions}>
               <button className={styles.secondaryBtn} onClick={togglePause}>
@@ -767,7 +821,7 @@ export function Recorder({ onViewMeeting, liveMeeting, focusSignal, hideLiveBann
             </div>
           </div>
           <div className={styles.feed} ref={feedRef}>
-            <div className={styles.feedKicker}>Live transcript · captured from your microphone</div>
+            <div className={styles.feedKicker}>Live transcript · Gemini · lines confirm every few seconds</div>
             {lines.map((l, i) => (
               <div key={`${l.tsLabel}-${i}`} className={styles.feedLine}>
                 <span className={styles.feedTs}>{l.tsLabel}</span>
@@ -786,7 +840,10 @@ export function Recorder({ onViewMeeting, liveMeeting, focusSignal, hideLiveBann
                 <span className={styles.feedText}>{interim}</span>
               </div>
             )}
-            {!paused && !interim && <div className={styles.listening}>Listening…</div>}
+            {!paused && !interim && lines.length === 0 && (
+              <div className={styles.listening}>Listening… first lines appear in a few seconds</div>
+            )}
+            {!paused && !interim && lines.length > 0 && <div className={styles.listening}>Transcribing…</div>}
           </div>
         </>
       )}

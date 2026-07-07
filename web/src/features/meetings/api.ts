@@ -14,6 +14,8 @@ export const meetingsApi = {
    * webm files in → server-side Whisper transcription → processed meeting out.
    */
   processAudio: (form: FormData) => apiUpload<ProcessedMeeting>('/meetings/audio', form),
+  /** Live near-real-time transcription of one short audio segment (drives the recording feed). */
+  transcribeChunk: (form: FormData) => apiUpload<{ text: string }>('/meetings/transcribe-chunk', form),
   /** Deletes a meeting note (transcript, actions, engagement events cascade). */
   remove: (id: string) => api.delete<{ ok: boolean }>(`/meetings/${id}`),
 };

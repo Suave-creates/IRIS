@@ -29,6 +29,7 @@ import { getEventAttendees } from '../../connectors/google/calendar.js';
 import { meetingsRepo } from './meetings.repo.js';
 import { extractMeeting } from './meetings.ai.js';
 import { mapPreviewSpeaker, mergeChannelSegments, transcribeAudio } from './stt.js';
+import { transcribeWithGemini } from './gemini.js';
 
 const listQuerySchema = z.object({ q: z.string().trim().max(200).optional() });
 const idParams = z.object({ id: z.string().min(1) });
@@ -94,6 +95,16 @@ const MAX_TRANSCRIPT_LINES = 1200;
 /** UTC MySQL DATETIME for the calendar module (which stores UTC). */
 function utcDateTime(date: Date): string {
   return date.toISOString().slice(0, 19).replace('T', ' ');
+}
+
+/** Streams one multipart file part to a temp file, recording it for cleanup. */
+async function saveUploadToTemp(part: MultipartFile, tempPaths: string[]): Promise<string> {
+  const rawExt = extname(part.filename ?? '').toLowerCase();
+  const ext = /^\.[a-z0-9]{1,8}$/.test(rawExt) ? rawExt : '.webm';
+  const path = join(tmpdir(), `iris-rec-${randomUUID()}${ext}`);
+  tempPaths.push(path);
+  await pipeline(part.file, createWriteStream(path));
+  return path;
 }
 
 // ── Core recording pipeline (shared by POST / and POST /audio) ───────────────
@@ -499,6 +510,32 @@ export async function meetingsRoutes(app: FastifyInstance): Promise<void> {
           /* already gone / locked — temp dir cleanup will get it */
         });
       }
+    }
+  });
+
+  // ── Live near-real-time transcription of one short audio segment ───────────
+  // Drives the recorder's live feed WHILE recording. Gemini only (fast); any
+  // failure returns empty text so the live feed just skips an update — this
+  // never blocks recording and never touches the final processed transcript.
+  app.post('/transcribe-chunk', async (req) => {
+    const tempPaths: string[] = [];
+    try {
+      let audioPath: string | null = null;
+      for await (const part of req.parts()) {
+        if (part.type === 'file') {
+          if (part.fieldname === 'audio' && !audioPath) audioPath = await saveUploadToTemp(part, tempPaths);
+          else part.file.resume();
+        }
+      }
+      if (!audioPath) return { data: { text: '' } };
+      const result = await transcribeWithGemini(audioPath);
+      const text = result ? result.segments.map((s) => s.text).join(' ').replace(/\s+/g, ' ').trim() : '';
+      return { data: { text } };
+    } catch (err) {
+      logger.warn({ err }, 'live chunk transcription failed');
+      return { data: { text: '' } };
+    } finally {
+      for (const path of tempPaths) await unlink(path).catch(() => undefined);
     }
   });
 }
