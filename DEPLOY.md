@@ -136,14 +136,23 @@ git pull                          # or copy the new files over
 docker compose up -d --build
 ```
 
-**Whisper notes**
+**Transcription (Gemini preferred, Whisper fallback)**
 
-- The `large-v3` model is baked into the image. To trade accuracy for a smaller,
-  faster image, rebuild with `docker compose build --build-arg WHISPER_MODEL=medium`
-  and set `WHISPER_MODEL=medium` in `.env`.
-- CPU transcription is deliberately accuracy-first and can take a while on long
-  recordings; that's expected. If a transcription fails, the server falls back
-  to the browser live-preview transcript automatically.
+- Set `GEMINI_API_KEY` to transcribe meeting audio with **Gemini** (best for
+  Hinglish; no native runtime). The server transcodes the recorder's WebM/Opus
+  to WAV with ffmpeg (already in the image), uploads it to the Gemini Files API,
+  and asks for a timestamped transcript. Claude still produces the summary/actions.
+- If `GEMINI_API_KEY` is unset or a Gemini call fails, it falls back to the baked
+  **Whisper large-v3**, and then to the browser live-preview transcript — so a
+  meeting is never lost.
+- Whisper `large-v3` is baked into the image. For a smaller/faster image, rebuild
+  with `docker compose build --build-arg WHISPER_MODEL=medium` and set
+  `WHISPER_MODEL=medium`. CPU Whisper is accuracy-first and slow on long recordings.
+
+**Local testing (no Docker):** add `GEMINI_API_KEY` to your dev `.env` and
+restart `npm run dev`. This bypasses the crashing local Whisper entirely — the
+server calls Gemini directly. You need **ffmpeg** on PATH (`winget install
+Gyan.FFmpeg`, or set `FFMPEG_PATH`).
 
 ## 8. Troubleshooting
 

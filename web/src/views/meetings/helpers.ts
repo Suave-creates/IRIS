@@ -72,6 +72,15 @@ export function browserRecognitionLocale(code: string): string {
   return code.trim().toLowerCase() === 'auto' ? 'en-IN' : code;
 }
 
+/** Friendly name for the STT engine that produced a transcript, or null to hide it. */
+export function sttEngineLabel(engine: string | null): string | null {
+  if (!engine) return null;
+  const e = engine.trim().toLowerCase();
+  if (e.startsWith('gemini')) return 'Gemini';
+  if (e.startsWith('whisper')) return 'Whisper large-v3';
+  return null; // browser-speech and friends — not worth advertising
+}
+
 /** The 10 processing-pipeline chips (advance ~480ms apart). */
 export const PIPELINE_STEPS: readonly string[] = [
   'Transcribe',

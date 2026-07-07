@@ -3,8 +3,9 @@ import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { RecordingTranscriptLine } from '@iris/shared';
-import { env } from '../../config/env.js';
+import { env, hasGemini } from '../../config/env.js';
 import { logger } from '../../lib/logger.js';
+import { transcribeWithGemini } from './gemini.js';
 
 /**
  * Server-side speech-to-text over the local faster-whisper venv. Accuracy over
@@ -135,6 +136,21 @@ export async function transcribeFile(filePath: string, language: string | null):
       finish(result);
     });
   });
+}
+
+/**
+ * Transcribes one recorded audio file with the best available engine: Gemini
+ * first when configured (best for Hinglish, no native runtime), else the local
+ * Whisper venv. Returns null only when both are unavailable/failed, so the
+ * caller can fall back to the browser live-preview transcript.
+ */
+export async function transcribeAudio(filePath: string, language: string | null): Promise<SttResult | null> {
+  if (hasGemini) {
+    const gemini = await transcribeWithGemini(filePath);
+    if (gemini && gemini.segments.length > 0) return gemini;
+    logger.info({ filePath }, 'gemini transcription unavailable/empty — trying local Whisper');
+  }
+  return transcribeFile(filePath, language);
 }
 
 // ── Channel → transcript-line mapping (pure, exported for tests) ─────────────

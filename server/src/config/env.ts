@@ -78,6 +78,13 @@ const EnvSchema = z
     ANTHROPIC_API_KEY: z.string().default(''),
     ANTHROPIC_MODEL: z.string().default('claude-sonnet-4-6'),
 
+    /** Gemini API key — when set, meeting audio is transcribed by Gemini (best for Hinglish). */
+    GEMINI_API_KEY: z.string().default(''),
+    /** Gemini model for audio transcription. */
+    GEMINI_MODEL: z.string().min(1).default('gemini-2.5-flash'),
+    /** ffmpeg binary used to transcode recorder WebM/Opus → WAV for Gemini. */
+    FFMPEG_PATH: z.string().min(1).default('ffmpeg'),
+
     /** Python interpreter of the faster-whisper venv (server/whisper/.venv). */
     WHISPER_PYTHON: z.string().min(1).default(defaultWhisperPython()),
     /** Whisper model id passed to transcribe.py (accuracy over speed). */
@@ -163,3 +170,6 @@ export const hasGoogleOAuth = Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_
 
 /** True when an Anthropic key is present (gates the AI/context engine). */
 export const hasAnthropic = Boolean(env.ANTHROPIC_API_KEY);
+
+/** True when a Gemini key is present (preferred meeting-audio transcription engine). */
+export const hasGemini = Boolean(env.GEMINI_API_KEY);

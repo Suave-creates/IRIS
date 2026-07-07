@@ -28,7 +28,7 @@ import { calendarRepo } from '../calendar/calendar.repo.js';
 import { getEventAttendees } from '../../connectors/google/calendar.js';
 import { meetingsRepo } from './meetings.repo.js';
 import { extractMeeting } from './meetings.ai.js';
-import { mapPreviewSpeaker, mergeChannelSegments, transcribeFile } from './stt.js';
+import { mapPreviewSpeaker, mergeChannelSegments, transcribeAudio } from './stt.js';
 
 const listQuerySchema = z.object({ q: z.string().trim().max(200).optional() });
 const idParams = z.object({ id: z.string().min(1) });
@@ -419,10 +419,16 @@ export async function meetingsRoutes(app: FastifyInstance): Promise<void> {
         }
       }
 
-      // Server-side Whisper per channel (sequential — the model is CPU-bound).
+      // Transcribe both channels concurrently (Gemini calls are network-bound,
+      // so this roughly halves latency when call audio is connected). Gemini
+      // when configured, else local Whisper. The call channel only counts when
+      // the mic channel transcribed too.
       const language = body.language ?? null;
-      const micResult = await transcribeFile(micPath, language);
-      const callResult = micResult && callPath ? await transcribeFile(callPath, language) : null;
+      const [micResult, callResultRaw] = await Promise.all([
+        transcribeAudio(micPath, language),
+        callPath ? transcribeAudio(callPath, language) : Promise.resolve(null),
+      ]);
+      const callResult = micResult ? callResultRaw : null;
 
       let transcript: RecordingTranscriptLine[] = [];
       let sttEngine = 'browser-speech';
@@ -431,7 +437,12 @@ export async function meetingsRoutes(app: FastifyInstance): Promise<void> {
         sttEngine = micResult.engine;
       }
       if (transcript.length === 0) {
-        // Whisper unavailable (or heard nothing) — the browser preview is the fallback.
+        // Both server engines produced nothing — fall back to the (flaky) browser
+        // preview. Loud on purpose: this is the usual cause of a bad transcript.
+        logger.warn(
+          { hadMicAudio: Boolean(micResult), previewLines: previewLines.length },
+          'server STT (Gemini/Whisper) produced no transcript — using browser preview fallback. Check GEMINI_API_KEY + ffmpeg.',
+        );
         transcript = previewLines.map((l) => ({ ...l, speaker: mapPreviewSpeaker(l.speaker, me.name) }));
         sttEngine = 'browser-speech';
       }

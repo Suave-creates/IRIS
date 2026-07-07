@@ -4,7 +4,7 @@ import { Modal, Spinner } from '@/components/primitives';
 import { ArrowUpRight, Check, Layers } from '@/components/icons';
 import { initials } from '@/lib/color';
 import { useDeleteMeeting, useMeeting, useMeetings } from '@/features/meetings/useMeetings';
-import { artifactTone, dayBlockColors, speakerColor } from './helpers';
+import { artifactTone, dayBlockColors, speakerColor, sttEngineLabel } from './helpers';
 import styles from './MeetingDetailModal.module.css';
 
 type Tab = 'summary' | 'transcript' | 'actions' | 'context';
@@ -188,7 +188,7 @@ export function MeetingDetailModal({ meeting, onClose }: MeetingDetailModalProps
           <>
             <div className={styles.transcriptIntro}>
               Speakers attributed by IRIS from context · timestamped · {live.durationLabel}
-              {live.sttEngine === 'whisper-large-v3' ? ' · Whisper large-v3' : ''}
+              {sttEngineLabel(live.sttEngine) ? ` · ${sttEngineLabel(live.sttEngine)}` : ''}
             </div>
             {transcript.map((l, i) => (
               <div key={`${l.tsLabel}-${i}`} className={styles.tLine}>

@@ -206,6 +206,16 @@ export function Recorder({ onViewMeeting, liveMeeting, focusSignal, hideLiveBann
   const processRecording = useProcessRecording();
   const processAudio = useProcessAudioRecording();
   const result = processAudio.data ?? processRecording.data ?? null;
+  // Surface which engine actually produced the transcript so it's obvious at a
+  // glance whether Gemini ran (vs the browser-preview fallback).
+  const sttEngine = result?.meeting.sttEngine ?? null;
+  const engineChip = sttEngine
+    ? /^gemini/i.test(sttEngine)
+      ? { text: 'Transcribed by Gemini', tone: 'accent' as const }
+      : /^whisper/i.test(sttEngine)
+        ? { text: 'Transcribed by Whisper', tone: 'accent' as const }
+        : { text: 'Browser fallback — Gemini did not run', tone: 'warn' as const }
+    : null;
   const pipelineDone = stepIdx >= PIPELINE_STEPS.length;
   const supported = useMemo(() => speechRecognitionCtor() !== null, []);
 
@@ -584,10 +594,11 @@ export function Recorder({ onViewMeeting, liveMeeting, focusSignal, hideLiveBann
     void finalize(transcript, Math.max(secsRef.current, 1));
   };
 
-  // ── Processing: advance one pipeline chip per ~480ms ──
+  // ── Processing: advance one pipeline chip per ~260ms ──
+  // Kept brisk so the animation doesn't gate a fast (Gemini/inline) transcription.
   useEffect(() => {
     if (phase !== 'processing' || pipelineDone) return;
-    const t = window.setInterval(() => setStepIdx((i) => Math.min(i + 1, PIPELINE_STEPS.length)), 480);
+    const t = window.setInterval(() => setStepIdx((i) => Math.min(i + 1, PIPELINE_STEPS.length)), 260);
     return () => window.clearInterval(t);
   }, [phase, pipelineDone]);
 
@@ -803,8 +814,7 @@ export function Recorder({ onViewMeeting, liveMeeting, focusSignal, hideLiveBann
               <div className={styles.procTitleRow}>
                 <Spinner size={16} />
                 <span className={styles.procTitle}>
-                  Transcribing with Whisper large-v3 &amp; extracting intelligence — accuracy first, longer recordings
-                  take a while
+                  Transcribing &amp; extracting intelligence — accuracy first, longer recordings take a while
                 </span>
               </div>
               <span className={styles.procPct}>{procPct}%</span>
@@ -826,7 +836,7 @@ export function Recorder({ onViewMeeting, liveMeeting, focusSignal, hideLiveBann
             {pipelineDone && !result && (
               <div className={styles.patienceRow}>
                 <Spinner size={13} />
-                <span>Still transcribing — large-v3 favors accuracy over speed</span>
+                <span>Still transcribing — accuracy over speed</span>
               </div>
             )}
           </div>
@@ -841,6 +851,11 @@ export function Recorder({ onViewMeeting, liveMeeting, focusSignal, hideLiveBann
           <div className={styles.doneMain}>
             <div className={styles.doneTitle}>Meeting processed &amp; saved</div>
             <div className={styles.doneChips}>
+              {engineChip && (
+                <span className={styles.doneChip} data-tone={engineChip.tone}>
+                  {engineChip.text}
+                </span>
+              )}
               <span className={styles.doneChip} data-tone="info">
                 Calendar event created · {result.calendarDateLabel}
               </span>
