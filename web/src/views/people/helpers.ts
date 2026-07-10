@@ -1,5 +1,5 @@
 import { PERSON_CATEGORIES, freqLabel } from '@iris/shared';
-import type { EngagementStatus, EngagementTrend, PersonCategory, PersonInteractionType } from '@iris/shared';
+import type { EngagementStatus, EngagementTrend, PersonCategory, PersonInteractionType, Priority } from '@iris/shared';
 import {
   AGENT_PINK,
   DIRECT2_AMBER,
@@ -112,6 +112,14 @@ export const TREND: Record<EngagementTrend, TrendMeta> = {
   rising: { arrow: '↑', word: 'Rising', color: 'var(--success)' },
   steady: { arrow: '→', word: 'Steady', color: 'var(--text-3)' },
   cooling: { arrow: '↓', word: 'Cooling', color: 'var(--warn)' },
+};
+
+/** Project priority chip colour (Actions-tab project rows — matches the Projects view's tones). */
+export const PROJECT_PRIORITY_COLORS: Record<Priority, string> = {
+  critical: 'var(--danger)',
+  high: 'var(--warn)',
+  med: 'var(--info)',
+  low: 'var(--text-3)',
 };
 
 /** Topics tab bar palette, rotating accent → info → teal → warn → pink. */

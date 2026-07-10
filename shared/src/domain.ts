@@ -40,6 +40,8 @@ export interface Project {
   deadline: string | null;
   progress: number;
   owner: string;
+  /** Stakeholder's email, when the source (or a manual edit) actually states one — links to People by email. */
+  ownerEmail: string | null;
   auto: boolean;
   summary: string;
   sourceDetail: string | null;
@@ -80,6 +82,7 @@ export interface UpdateProjectInput {
   deadline?: string | null;
   status?: string;
   owner?: string;
+  ownerEmail?: string | null;
   summary?: string;
   progress?: number;
   currentStage?: number;
@@ -200,9 +203,18 @@ export interface PersonFileRow {
   ref: string | null;
 }
 export interface PersonInsightRow {
-  kind: 'theme' | 'followthrough' | 'nextstep';
+  kind: 'theme' | 'followthrough' | 'nextstep' | 'project';
   title: string;
   text: string;
+}
+/** A project this person is the real stakeholder/owner of (matched by email, else name). */
+export interface PersonProjectRow {
+  id: string;
+  name: string;
+  status: string;
+  priority: Priority;
+  progress: number;
+  deadlineLabel: string | null;
 }
 /** The full drawer payload for one person (GET /api/people/:id/context). */
 export interface PersonContext {
@@ -219,6 +231,8 @@ export interface PersonContext {
   topics: PersonTopicRow[];
   openActions: PersonActionRow[];
   doneActions: PersonActionRow[];
+  /** Real projects this person is the stakeholder/owner of (shown on the Actions tab). */
+  projects: PersonProjectRow[];
   files: PersonFileRow[];
   insights: PersonInsightRow[];
 }

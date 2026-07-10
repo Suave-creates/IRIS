@@ -8,8 +8,10 @@ import type {
   PersonEngagement,
   PersonFileRow,
   PersonInsightRow,
+  PersonProjectRow,
   PersonTimelineEntry,
   PersonTopicRow,
+  Priority,
 } from '@iris/shared';
 import { freqLabel as sharedFreqLabel } from '@iris/shared';
 import {
@@ -82,6 +84,17 @@ export interface PersonArtifactLite {
   meetingTitle: string;
   /** MySQL DATETIME string. */
   startedAt: string;
+}
+
+/** A project this person is the real stakeholder/owner of (read by people.repo). */
+export interface PersonProjectLite {
+  id: string;
+  name: string;
+  status: string;
+  priority: Priority;
+  progress: number;
+  /** MySQL DATE string or null. */
+  deadline: string | null;
 }
 
 // ── Core derivations ────────────────────────────────────────────────────────
@@ -219,11 +232,41 @@ function toFileRow(artifact: PersonArtifactLite): PersonFileRow {
   };
 }
 
-/** Real-data insights; empty until the person has processed meetings. */
+/** Drawer Actions-tab project rows from the projects this person is the real stakeholder of. */
+function toProjectRow(project: PersonProjectLite): PersonProjectRow {
+  return {
+    id: project.id,
+    name: project.name,
+    status: project.status,
+    priority: project.priority,
+    progress: project.progress,
+    deadlineLabel: project.deadline ? dateLabel(project.deadline) : null,
+  };
+}
+
+const URGENT_PRIORITIES = new Set<Priority>(['critical', 'high']);
+
+/** Stakeholder-involvement insight, surfacing the most urgent project first. */
+function projectInsight(projects: PersonProjectRow[]): PersonInsightRow | null {
+  if (!projects.length) return null;
+  const urgent = projects.filter((p) => URGENT_PRIORITIES.has(p.priority));
+  const lead = urgent[0] ?? projects[0]!;
+  const countLabel = `${projects.length} project${projects.length === 1 ? '' : 's'}`;
+  const urgentNote = urgent.length ? `, ${urgent.length} at high priority or above` : '';
+  const deadlineNote = lead.deadlineLabel ? `, due ${lead.deadlineLabel}` : '';
+  return {
+    kind: 'project',
+    title: 'Project involvement',
+    text: `Stakeholder on ${countLabel}${urgentNote} — most urgent is "${lead.name}" (${lead.status}, ${lead.progress}% complete${deadlineNote}).`,
+  };
+}
+
+/** Real-data insights; empty until the person has processed meetings or owned projects. */
 function insightRows(
   meetings: PersonMeetingLite[],
   actions: PersonActionLite[],
   topics: PersonTopicRow[],
+  projects: PersonProjectRow[],
 ): PersonInsightRow[] {
   const insights: PersonInsightRow[] = [];
   const top = topics[0];
@@ -252,6 +295,8 @@ function insightRows(
       text: `"${nextDue.title}" is due ${dateLabel(nextDue.dueDate!)} — worth a follow-up before then.`,
     });
   }
+  const proj = projectInsight(projects);
+  if (proj) insights.push(proj);
   return insights;
 }
 
@@ -265,6 +310,7 @@ export function buildPersonContext(
   meetings: PersonMeetingLite[],
   actions: PersonActionLite[],
   artifacts: PersonArtifactLite[] = [],
+  projects: PersonProjectLite[] = [],
   now: Date = new Date(),
 ): PersonContext {
   const frame = monthFrame(now);
@@ -272,6 +318,7 @@ export function buildPersonContext(
   const topics = topicRows(meetings);
   const openActions = actions.filter((a) => !a.done).map(toActionRow);
   const doneActions = actions.filter((a) => a.done).map(toActionRow);
+  const projectRows = projects.map(toProjectRow);
 
   // Calendar: the real current month; dots only where real meetings happened.
   const meetingsByDay = new Map<number, PersonMeetingLite[]>();
@@ -344,8 +391,10 @@ export function buildPersonContext(
     topics,
     openActions,
     doneActions,
+    // Real projects this person is the stakeholder/owner of (empty until any exist).
+    projects: projectRows,
     // Real artifacts extracted from this person's meetings (empty until some exist).
     files: artifacts.map(toFileRow),
-    insights: insightRows(meetings, actions, topics),
+    insights: insightRows(meetings, actions, topics, projectRows),
   };
 }

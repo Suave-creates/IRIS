@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatRecord, pickHeader } from './projects.ai.js';
+import { formatRecord, normalizeProject, pickHeader } from './projects.ai.js';
 
 describe('pickHeader', () => {
   it('picks the most label-dense row among the first few', () => {
@@ -27,5 +27,34 @@ describe('formatRecord', () => {
   });
   it('returns null for an all-empty row', () => {
     expect(formatRecord(2, header, ['', '', ''])).toBeNull();
+  });
+});
+
+describe('normalizeProject', () => {
+  const base = { name: 'Revenue Tracker', summary: 'Tracks revenue.', priority: 'high', status: 'On track' };
+
+  it('captures a stakeholder name and a well-formed email', () => {
+    const p = normalizeProject({ ...base, owner: 'Sam Patel', ownerEmail: 'Sam.Patel@Example.com' }, 'Sheet', '');
+    expect(p.owner).toBe('Sam Patel');
+    // Emails are lowercased for stable matching against People records.
+    expect(p.ownerEmail).toBe('sam.patel@example.com');
+  });
+
+  it('drops a hallucinated/malformed email but keeps the name', () => {
+    const p = normalizeProject({ ...base, owner: 'Sam Patel', ownerEmail: 'not-an-email' }, 'Sheet', '');
+    expect(p.owner).toBe('Sam Patel');
+    expect(p.ownerEmail).toBeNull();
+  });
+
+  it('defaults owner and ownerEmail to null when absent', () => {
+    const p = normalizeProject({ ...base }, 'Sheet', '');
+    expect(p.owner).toBeNull();
+    expect(p.ownerEmail).toBeNull();
+  });
+
+  it('treats an empty-string owner/ownerEmail as absent', () => {
+    const p = normalizeProject({ ...base, owner: '', ownerEmail: '' }, 'Sheet', '');
+    expect(p.owner).toBeNull();
+    expect(p.ownerEmail).toBeNull();
   });
 });

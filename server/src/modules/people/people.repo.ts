@@ -1,8 +1,14 @@
 import type { RowDataPacket } from 'mysql2/promise';
-import type { Person, PersonCategory, PersonFunction, PersonInput, PersonLocation } from '@iris/shared';
+import type { Person, PersonCategory, PersonFunction, PersonInput, PersonLocation, Priority } from '@iris/shared';
 import { execute, query, withTransaction } from '../../db/pool.js';
 import { id } from '../../lib/ids.js';
-import type { EngagementEventLite, PersonActionLite, PersonArtifactLite, PersonMeetingLite } from './people.derive.js';
+import type {
+  EngagementEventLite,
+  PersonActionLite,
+  PersonArtifactLite,
+  PersonMeetingLite,
+  PersonProjectLite,
+} from './people.derive.js';
 import { deriveEngagement, freqLabel } from './people.derive.js';
 
 // ── Row shapes (DB snake_case) ──────────────────────────────────────────────
@@ -107,6 +113,15 @@ interface PersonArtifactRowDb extends RowDataPacket {
   title: string;
   started_at: string;
   artifacts: unknown;
+}
+
+interface PersonProjectRowDb extends RowDataPacket {
+  id: string;
+  name: string;
+  status: string;
+  priority: Priority;
+  progress: number;
+  deadline: string | null;
 }
 
 /** Parse one meeting's artifacts JSON column defensively ({kind,label,ref} rows only). */
@@ -252,6 +267,37 @@ export const peopleRepo = {
       }
     }
     return out;
+  },
+
+  /**
+   * Real projects this person is the stakeholder/owner of. Prefers a real email
+   * match (project.owner_email = person.email) — the authoritative link when a
+   * source stated one; falls back to matching the freeform owner name (first or
+   * full, case-insensitive) only for projects that carry no owner email at all,
+   * so a project with a *different* stated email never matches on name alone.
+   */
+  async projectsForPerson(tenantId: string, personName: string, personEmail: string | null): Promise<PersonProjectLite[]> {
+    const firstName = personName.trim().split(/\s+/)[0] ?? personName;
+    const rows = await query<PersonProjectRowDb[]>(
+      `SELECT id, name, status, priority, progress, deadline
+         FROM projects
+        WHERE tenant_id = :tid
+          AND (
+            (:hasEmail = 1 AND LOWER(owner_email) = LOWER(:email))
+            OR (owner_email IS NULL AND LOWER(TRIM(owner)) IN (LOWER(:first), LOWER(:full)))
+          )
+        ORDER BY FIELD(priority, 'critical', 'high', 'med', 'low'), deadline IS NULL, deadline, name
+        LIMIT 50`,
+      { tid: tenantId, hasEmail: personEmail ? 1 : 0, email: personEmail ?? '', first: firstName, full: personName.trim() },
+    );
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      status: r.status,
+      priority: r.priority,
+      progress: r.progress,
+      deadline: r.deadline,
+    }));
   },
 
   /** Engagement events for one person, oldest first (feeds the context endpoint). */

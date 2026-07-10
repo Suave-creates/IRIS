@@ -167,7 +167,7 @@ function Overview({ project, srcLabel }: { project: Project; srcLabel: string })
       </div>
       <div className={styles.metaGrid}>
         <MetaCell label="Deadline" value={deadlineLabel(project.deadline)} />
-        <MetaCell label="Owner" value={project.owner || '—'} />
+        <MetaCell label="Owner" value={project.owner ? `${project.owner}${project.ownerEmail ? ` · ${project.ownerEmail}` : ''}` : '—'} />
         <MetaCell label="Source" value={srcLabel} />
         <MetaCell label="Progress" value={`${project.progress}%`} />
       </div>
@@ -199,6 +199,7 @@ function EditOverview({ project }: { project: Project }) {
     status: project.status,
     deadline: project.deadline ?? '',
     owner: project.owner,
+    ownerEmail: project.ownerEmail ?? '',
     progress: project.progress,
     currentStage: project.currentStage,
   });
@@ -215,6 +216,7 @@ function EditOverview({ project }: { project: Project }) {
         status: draft.status.trim() || project.status,
         deadline: draft.deadline.trim() ? draft.deadline.trim() : null,
         owner: draft.owner.trim() || project.owner,
+        ownerEmail: draft.ownerEmail.trim() ? draft.ownerEmail.trim().toLowerCase() : null,
         progress: Math.max(0, Math.min(100, Number(draft.progress) || 0)),
         currentStage: Math.max(0, Math.min(stages.length - 1, Number(draft.currentStage) || 0)),
       },
@@ -248,6 +250,17 @@ function EditOverview({ project }: { project: Project }) {
         </Labeled>
         <Labeled label="Owner">
           <input className={styles.input} value={draft.owner} onChange={(e) => setDraft({ ...draft, owner: e.target.value })} />
+        </Labeled>
+      </div>
+      <div className={styles.editRow}>
+        <Labeled label="Owner email (links to People)">
+          <input
+            className={styles.input}
+            type="email"
+            placeholder="owner@company.com"
+            value={draft.ownerEmail}
+            onChange={(e) => setDraft({ ...draft, ownerEmail: e.target.value })}
+          />
         </Labeled>
       </div>
       <div className={styles.editRow}>

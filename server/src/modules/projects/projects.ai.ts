@@ -10,6 +10,10 @@ export interface ExtractedProject {
   priority: Priority;
   deadline: string | null;
   status: string;
+  /** Stakeholder/owner name, when the source states one (e.g. an Owner/POC/Assigned-to column). */
+  owner: string | null;
+  /** Stakeholder's email, ONLY when the source literally contains one — never inferred/guessed. */
+  ownerEmail: string | null;
   fields: { label: string; value: string }[];
   tasks: { title: string }[];
   stages: string[];
@@ -24,9 +28,21 @@ const PROJECT_ITEM_SCHEMA = {
     priority: { type: 'string', enum: ['critical', 'high', 'med', 'low'] },
     deadline: { type: 'string', description: 'YYYY-MM-DD if a clear deadline exists, else empty string' },
     status: { type: 'string', description: 'e.g. Planning, In progress, Review, At risk, Blocked, On track' },
+    owner: {
+      type: 'string',
+      description:
+        'The stakeholder/owner\'s real name, if the source names one (an Owner/POC/Stakeholder/Assigned-to column ' +
+        'or similar). Empty string if no specific person is named.',
+    },
+    ownerEmail: {
+      type: 'string',
+      description:
+        'The stakeholder\'s email address, ONLY if the source literally contains one next to their name. ' +
+        'Never invent or guess an email from a name. Empty string if none is present.',
+    },
     fields: {
       type: 'array',
-      description: '3–5 key facts as label/value pairs',
+      description: '3–5 key facts as label/value pairs (exclude owner/stakeholder — that has its own field above)',
       items: { type: 'object', properties: { label: { type: 'string' }, value: { type: 'string' } }, required: ['label', 'value'] },
     },
     tasks: {
@@ -37,7 +53,7 @@ const PROJECT_ITEM_SCHEMA = {
     stages: { type: 'array', items: { type: 'string' }, description: 'Ordered milestone names' },
     currentStage: { type: 'integer', description: 'Index into stages of the current milestone' },
   },
-  required: ['name', 'summary', 'priority', 'status', 'fields', 'tasks', 'stages', 'currentStage'],
+  required: ['name', 'summary', 'priority', 'status', 'owner', 'ownerEmail', 'fields', 'tasks', 'stages', 'currentStage'],
 };
 
 const EXTRACT_TOOL: Anthropic.Tool = {
@@ -77,8 +93,24 @@ function normalizeDeadline(raw: unknown): string | null {
 
 const VALID_PRIORITY = new Set<Priority>(['critical', 'high', 'med', 'low']);
 
+/** Loose email shape check — good enough to reject obvious non-emails without over-validating. */
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Trims a possibly-empty raw string; empty/non-string becomes null. */
+function normalizeOptionalText(raw: unknown, maxLen: number): string | null {
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  return trimmed ? trimmed.slice(0, maxLen) : null;
+}
+
+/** Only accepts a value that actually looks like an email; anything else (hallucinated or malformed) is dropped. */
+function normalizeOwnerEmail(raw: unknown): string | null {
+  const text = normalizeOptionalText(raw, 255);
+  return text && EMAIL_RE.test(text) ? text.toLowerCase() : null;
+}
+
 /** Coerces one raw tool-emitted project object into a safe ExtractedProject. */
-function normalizeProject(raw: Record<string, unknown>, sourceName: string, content: string): ExtractedProject {
+export function normalizeProject(raw: Record<string, unknown>, sourceName: string, content: string): ExtractedProject {
   const priority = VALID_PRIORITY.has(raw.priority as Priority) ? (raw.priority as Priority) : 'med';
   const fields = Array.isArray(raw.fields)
     ? (raw.fields as { label?: unknown; value?: unknown }[])
@@ -100,6 +132,8 @@ function normalizeProject(raw: Record<string, unknown>, sourceName: string, cont
     priority,
     status: (typeof raw.status === 'string' && raw.status.trim()) || 'In progress',
     deadline: normalizeDeadline(raw.deadline),
+    owner: normalizeOptionalText(raw.owner, 160),
+    ownerEmail: normalizeOwnerEmail(raw.ownerEmail),
     fields: fields.length ? fields : [{ label: 'Source', value: sourceName }],
     tasks,
     stages: stages.length ? stages : ['Planning', 'In progress', 'Review', 'Done'],
@@ -122,6 +156,8 @@ export async function extractProjects(
     priority: 'med',
     status: 'In progress',
     deadline: null,
+    owner: null,
+    ownerEmail: null,
     fields: [{ label: 'Source', value: sourceName }],
     tasks: [],
     stages: ['Planning', 'In progress', 'Review', 'Done'],
@@ -138,6 +174,9 @@ export async function extractProjects(
           `Ignore boilerplate, navigation, signatures, repeated headers, totals, and empty or irrelevant rows. ` +
           `For each project write a tight, action-oriented summary, a sensible priority and status, 3–5 key fields, ` +
           `realistic ordered stages with the current index, and up to 5 concrete next tasks. ` +
+          `If the source names a real stakeholder/owner (an Owner/POC/Stakeholder/Assigned-to column or similar), ` +
+          `capture their name in "owner", and their email in "ownerEmail" ONLY if the source literally states one — ` +
+          `never invent or guess an email from a name. ` +
           `If the source contains no real project, return an empty projects array.`,
       ),
       messages: [{ role: 'user', content: `Source: ${sourceName} (${type})\n\nContent:\n"""${content}"""` }],
@@ -222,6 +261,8 @@ export async function extractProjectsFromSheet(sourceName: string, tabs: SheetTa
     priority: 'med',
     status: 'In progress',
     deadline: null,
+    owner: null,
+    ownerEmail: null,
     fields: [{ label: 'Source', value: sourceName }],
     tasks: [],
     stages: ['Planning', 'In progress', 'Review', 'Done'],
@@ -271,7 +312,10 @@ export async function extractProjectsFromSheet(sourceName: string, tabs: SheetTa
             `SKIP a record only if it is empty, a repeated header, or a section/subtotal/total row — otherwise always include it. ` +
             `Use the project-name column for the name; write a tight 1–2 sentence executive summary from the row; ` +
             `infer a sensible priority and status from the status/importance columns; put the 3–5 most useful columns as fields; ` +
-            `set a deadline from any ETA/timeline column (YYYY-MM-DD, else empty); and add concrete next tasks the row implies.`,
+            `set a deadline from any ETA/timeline column (YYYY-MM-DD, else empty); and add concrete next tasks the row implies. ` +
+            `If any column names a stakeholder/owner (Owner/POC/Stakeholder/Assigned-to/DRI or similar), put their ` +
+            `name in "owner"; if that same column (or an adjacent one) literally contains an email address, put it ` +
+            `in "ownerEmail" — never invent or guess an email from a name alone.`,
         ),
         messages: [{ role: 'user', content: chunk.records }],
         tool: EXTRACT_TOOL,

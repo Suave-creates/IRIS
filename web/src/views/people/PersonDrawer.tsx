@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import type { Person, PersonContext, PersonInsightRow } from '@iris/shared';
+import type { Person, PersonContext, PersonInsightRow, PersonProjectRow } from '@iris/shared';
 import { ArrowUpRight, Check } from '@/components/icons';
 import { useDeletePerson, usePersonContext } from '@/features/people/usePeople';
 import {
   CATEGORY_COLORS,
   INTERACTION_COLORS,
+  PROJECT_PRIORITY_COLORS,
   STATUS_COLORS,
   THU_PURPLE,
   TOPIC_BAR_COLORS,
@@ -49,6 +50,7 @@ const INSIGHT_DOTS: Record<PersonInsightRow['kind'], string> = {
   theme: 'var(--accent)',
   followthrough: 'var(--success)',
   nextstep: 'var(--warn)',
+  project: 'var(--info)',
 };
 
 export interface PersonDrawerProps {
@@ -410,14 +412,26 @@ function TopicsTab({ ctx }: { ctx: PersonContext }) {
 /* ── Actions ─────────────────────────────────────────────────────────────── */
 
 function ActionsTab({ ctx }: { ctx: PersonContext }) {
-  if (!ctx.openActions.length && !ctx.doneActions.length) {
+  if (!ctx.openActions.length && !ctx.doneActions.length && !ctx.projects.length) {
     return (
       <div className={styles.tabEmpty}>No action items yet — IRIS extracts them from meetings this person owns.</div>
     );
   }
   return (
     <>
-      <div className={styles.sectionKicker}>Open</div>
+      {ctx.projects.length > 0 && (
+        <>
+          <div className={styles.sectionKicker}>Stakeholder on</div>
+          {ctx.projects.map((p) => (
+            <ProjectRow key={p.id} project={p} />
+          ))}
+        </>
+      )}
+      {(ctx.openActions.length > 0 || ctx.doneActions.length > 0) && (
+        <div className={ctx.projects.length > 0 ? `${styles.sectionKicker} ${styles.sectionKickerDone}` : styles.sectionKicker}>
+          Open
+        </div>
+      )}
       {ctx.openActions.map((a, i) => (
         <div key={`${a.title}-${i}`} className={styles.actionCard}>
           <span className={styles.checkbox} />
@@ -428,7 +442,9 @@ function ActionsTab({ ctx }: { ctx: PersonContext }) {
           {a.dueLabel && <span className={styles.duePill}>{a.dueLabel}</span>}
         </div>
       ))}
-      <div className={`${styles.sectionKicker} ${styles.sectionKickerDone}`}>Completed</div>
+      {ctx.doneActions.length > 0 && (
+        <div className={`${styles.sectionKicker} ${styles.sectionKickerDone}`}>Completed</div>
+      )}
       {ctx.doneActions.map((a, i) => (
         <div key={`${a.title}-${i}`} className={`${styles.actionCard} ${styles.actionCardDone}`}>
           <span className={styles.checkboxDone}>
@@ -441,6 +457,20 @@ function ActionsTab({ ctx }: { ctx: PersonContext }) {
         </div>
       ))}
     </>
+  );
+}
+
+function ProjectRow({ project }: { project: PersonProjectRow }) {
+  const metaParts = [project.status, `${project.progress}% complete`];
+  if (project.deadlineLabel) metaParts.push(`Due ${project.deadlineLabel}`);
+  return (
+    <div className={styles.actionCard}>
+      <span className={styles.projectDot} style={{ background: PROJECT_PRIORITY_COLORS[project.priority] }} />
+      <div className={styles.actionMain}>
+        <div className={styles.actionTitle}>{project.name}</div>
+        <div className={styles.actionMeta}>{metaParts.join(' · ')}</div>
+      </div>
+    </div>
   );
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { EngagementEventLite, PersonActionLite, PersonMeetingLite, PersonShape } from './people.derive.js';
+import type { EngagementEventLite, PersonActionLite, PersonMeetingLite, PersonProjectLite, PersonShape } from './people.derive.js';
 import {
   buildPersonContext,
   cadenceBaseScore,
@@ -119,7 +119,7 @@ describe('deriveEngagement', () => {
 });
 
 describe('buildPersonContext (no meetings)', () => {
-  const ctx = buildPersonContext(person, [], [], [], [], NOW);
+  const ctx = buildPersonContext(person, [], [], [], [], [], NOW);
   it('writes an honest no-meetings summary and no boost banner', () => {
     expect(ctx.summary).toBe(
       'Part of Operations at BWD. Cadence is daily. No processed meetings yet — IRIS builds living context here as meetings are recorded.',
@@ -139,6 +139,7 @@ describe('buildPersonContext (no meetings)', () => {
     expect(ctx.topics).toEqual([]);
     expect(ctx.openActions).toEqual([]);
     expect(ctx.doneActions).toEqual([]);
+    expect(ctx.projects).toEqual([]);
     expect(ctx.files).toEqual([]);
     expect(ctx.insights).toEqual([]);
   });
@@ -160,7 +161,7 @@ describe('buildPersonContext (with real meetings)', () => {
     dueDate: null,
     done: true,
   };
-  const ctx = buildPersonContext(person, [boost], [meeting, second], [action, doneAction], [], NOW);
+  const ctx = buildPersonContext(person, [boost], [meeting, second], [action, doneAction], [], [], NOW);
 
   it('summarizes from real topics and open actions, banner dated with the real event date', () => {
     expect(ctx.summary).toContain('focused on ASRS optimization');
@@ -201,5 +202,45 @@ describe('buildPersonContext (with real meetings)', () => {
     expect(kinds).toEqual(['theme', 'followthrough', 'nextstep']);
     expect(ctx.insights[0]!.text).toBe('"ASRS optimization" has come up in 2 of the last 2 meetings.');
     expect(ctx.insights[2]!.text).toContain('due Jul 6');
+  });
+});
+
+describe('buildPersonContext (stakeholder on real projects)', () => {
+  const critical: PersonProjectLite = {
+    id: 'proj_1',
+    name: 'Revenue Tracker',
+    status: 'At risk',
+    priority: 'critical',
+    progress: 30,
+    deadline: '2026-07-10',
+  };
+  const med: PersonProjectLite = {
+    id: 'proj_2',
+    name: 'Hiring Plan FY26',
+    status: 'Review',
+    progress: 70,
+    priority: 'med',
+    deadline: null,
+  };
+  const ctx = buildPersonContext(person, [], [], [], [], [critical, med], NOW);
+
+  it('maps real projects into Actions-tab rows with a formatted deadline', () => {
+    expect(ctx.projects).toEqual([
+      { id: 'proj_1', name: 'Revenue Tracker', status: 'At risk', priority: 'critical', progress: 30, deadlineLabel: 'Jul 10' },
+      { id: 'proj_2', name: 'Hiring Plan FY26', status: 'Review', priority: 'med', progress: 70, deadlineLabel: null },
+    ]);
+  });
+
+  it('adds a project-involvement insight leading with the most urgent project', () => {
+    const insight = ctx.insights.find((i) => i.kind === 'project');
+    expect(insight).toBeDefined();
+    expect(insight!.text).toBe(
+      'Stakeholder on 2 projects, 1 at high priority or above — most urgent is "Revenue Tracker" (At risk, 30% complete, due Jul 10).',
+    );
+  });
+
+  it('adds no project insight when the person owns no projects', () => {
+    const empty = buildPersonContext(person, [], [], [], [], [], NOW);
+    expect(empty.insights.some((i) => i.kind === 'project')).toBe(false);
   });
 });
