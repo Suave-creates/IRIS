@@ -73,6 +73,22 @@ export const Folder = (p: IconProps) => (
   </Svg>
 );
 
+export const BarChart = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M3 21h18" />
+    <rect x="5" y="11" width="3.4" height="7" rx="0.8" />
+    <rect x="10.3" y="6.5" width="3.4" height="11.5" rx="0.8" />
+    <rect x="15.6" y="14" width="3.4" height="4" rx="0.8" />
+  </Svg>
+);
+
+export const LayoutWeek = (p: IconProps) => (
+  <Svg {...p}>
+    <rect x="3" y="4.5" width="18" height="15" rx="2.2" />
+    <path d="M3 9h18M9 9v10.5M15 9v10.5" />
+  </Svg>
+);
+
 export const Mail = (p: IconProps) => (
   <Svg {...p}>
     <rect x="3" y="5" width="18" height="14" rx="2.2" />

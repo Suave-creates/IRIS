@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
-import type { Person, PersonContext, PersonInsightRow, PersonProjectRow } from '@iris/shared';
+import type { Kpi, Person, PersonContext, PersonInsightRow, PersonKpiRow, PersonProjectRow, Project } from '@iris/shared';
 import { ArrowUpRight, Check } from '@/components/icons';
 import { useDeletePerson, usePersonContext } from '@/features/people/usePeople';
+import { ProjectDetailModal } from '../projects/ProjectDetailModal';
+import { KpiDetailModal } from '../kpi/KpiDetailModal';
+import { TREND_META as KPI_TREND_META, attainmentColor } from '../kpi/helpers';
 import {
   CATEGORY_COLORS,
   INTERACTION_COLORS,
@@ -16,15 +19,64 @@ import {
 } from './helpers';
 import styles from './PersonDrawer.module.css';
 
+// Actions and KPI sit together; Topics is second-last (before Insights).
 const TABS = [
   ['overview', 'Overview'],
   ['timeline', 'Timeline'],
-  ['topics', 'Topics'],
   ['actions', 'Actions'],
+  ['kpi', 'KPIs'],
   ['files', 'Files'],
+  ['topics', 'Topics'],
   ['insights', 'Insights'],
 ] as const;
 type TabKey = (typeof TABS)[number][0];
+
+/** Minimal Project shell from a PersonProjectRow — the detail modal hydrates the rest from the projects cache. */
+function stubProject(row: PersonProjectRow): Project {
+  return {
+    id: row.id,
+    name: row.name,
+    source: 'sheet',
+    priority: row.priority,
+    status: row.status,
+    deadline: null,
+    progress: row.progress,
+    owner: '',
+    auto: false,
+    summary: '',
+    sourceDetail: null,
+    stages: [],
+    currentStage: 0,
+    fields: [],
+    tasks: [],
+    files: [],
+    activity: [],
+  };
+}
+
+/** Minimal KPI shell from a PersonKpiRow — the detail modal hydrates the rest from the KPI cache. */
+function stubKpi(row: PersonKpiRow): Kpi {
+  return {
+    id: row.id,
+    name: row.name,
+    source: 'sheet',
+    priority: row.priority,
+    status: row.status,
+    owner: '',
+    auto: false,
+    summary: '',
+    sourceDetail: null,
+    unit: row.unit,
+    target: row.target,
+    actual: row.actual,
+    trend: row.trend,
+    period: null,
+    attainment: row.attainment,
+    fields: [],
+    initiatives: [],
+    activity: [],
+  };
+}
 
 /** Known file-kind chip tones (URL/JIRA/DOC info · GIT violet · SHEET/SHT success · PDF danger). */
 const FILE_TONES: Record<string, { color: string; bg: string } | undefined> = {
@@ -64,6 +116,8 @@ export interface PersonDrawerProps {
 export function PersonDrawer({ person, onEdit, onClose }: PersonDrawerProps) {
   const [tab, setTab] = useState<TabKey>('overview');
   const [selDay, setSelDay] = useState<number | null>(null);
+  const [openProject, setOpenProject] = useState<Project | null>(null);
+  const [openKpi, setOpenKpi] = useState<Kpi | null>(null);
   const context = usePersonContext(person?.id ?? null);
   const deletePerson = useDeletePerson();
 
@@ -191,13 +245,18 @@ export function PersonDrawer({ person, onEdit, onClose }: PersonDrawerProps) {
               )}
               {tab === 'timeline' && <TimelineTab ctx={ctx} />}
               {tab === 'topics' && <TopicsTab ctx={ctx} />}
-              {tab === 'actions' && <ActionsTab ctx={ctx} />}
+              {tab === 'actions' && <ActionsTab ctx={ctx} onOpenProject={(p) => setOpenProject(stubProject(p))} />}
+              {tab === 'kpi' && <KpiTab ctx={ctx} onOpenKpi={(kpi) => setOpenKpi(stubKpi(kpi))} />}
               {tab === 'files' && <FilesTab ctx={ctx} hasEmail={!!person.email} />}
               {tab === 'insights' && <InsightsTab ctx={ctx} />}
             </>
           ) : null}
         </div>
       </aside>
+
+      {/* Opened on top of the drawer (modal z-index sits above the panel). */}
+      <ProjectDetailModal project={openProject} onClose={() => setOpenProject(null)} />
+      <KpiDetailModal kpi={openKpi} onClose={() => setOpenKpi(null)} />
     </>
   );
 }
@@ -362,7 +421,7 @@ function OverviewTab({ person, ctx, statusColor, trend, selDay, onSelectDay }: O
 
 function TimelineTab({ ctx }: { ctx: PersonContext }) {
   if (!ctx.timeline.length) {
-    return <div className={styles.tabEmpty}>No interactions yet — processed meetings will appear here.</div>;
+    return <div className={styles.tabEmpty}>No activity yet — meetings and projects this person is on will appear here.</div>;
   }
   return (
     <>
@@ -386,11 +445,13 @@ function TimelineTab({ ctx }: { ctx: PersonContext }) {
 
 function TopicsTab({ ctx }: { ctx: PersonContext }) {
   if (!ctx.topics.length) {
-    return <div className={styles.tabEmpty}>No topics yet — they aggregate from the meetings this person joins.</div>;
+    return (
+      <div className={styles.tabEmpty}>No topics yet — they aggregate from this person’s meetings and projects.</div>
+    );
   }
   return (
     <>
-      <div className={styles.topicsIntro}>Aggregated from this person’s processed meetings</div>
+      <div className={styles.topicsIntro}>Aggregated from this person’s meetings and projects</div>
       {ctx.topics.map((t, i) => (
         <div key={t.name} className={styles.topicRow}>
           <div className={styles.topicHead}>
@@ -411,7 +472,7 @@ function TopicsTab({ ctx }: { ctx: PersonContext }) {
 
 /* ── Actions ─────────────────────────────────────────────────────────────── */
 
-function ActionsTab({ ctx }: { ctx: PersonContext }) {
+function ActionsTab({ ctx, onOpenProject }: { ctx: PersonContext; onOpenProject: (p: PersonProjectRow) => void }) {
   if (!ctx.openActions.length && !ctx.doneActions.length && !ctx.projects.length) {
     return (
       <div className={styles.tabEmpty}>No action items yet — IRIS extracts them from meetings this person owns.</div>
@@ -423,7 +484,7 @@ function ActionsTab({ ctx }: { ctx: PersonContext }) {
         <>
           <div className={styles.sectionKicker}>Stakeholder on</div>
           {ctx.projects.map((p) => (
-            <ProjectRow key={p.id} project={p} />
+            <ProjectRow key={p.id} project={p} onOpen={() => onOpenProject(p)} />
           ))}
         </>
       )}
@@ -460,17 +521,55 @@ function ActionsTab({ ctx }: { ctx: PersonContext }) {
   );
 }
 
-function ProjectRow({ project }: { project: PersonProjectRow }) {
+function ProjectRow({ project, onOpen }: { project: PersonProjectRow; onOpen: () => void }) {
   const metaParts = [project.status, `${project.progress}% complete`];
   if (project.deadlineLabel) metaParts.push(`Due ${project.deadlineLabel}`);
   return (
-    <div className={styles.actionCard}>
+    <button type="button" className={`${styles.actionCard} ${styles.linkCard}`} onClick={onOpen} title="Open project">
       <span className={styles.projectDot} style={{ background: PROJECT_PRIORITY_COLORS[project.priority] }} />
       <div className={styles.actionMain}>
         <div className={styles.actionTitle}>{project.name}</div>
         <div className={styles.actionMeta}>{metaParts.join(' · ')}</div>
       </div>
-    </div>
+      <ArrowUpRight className={styles.linkArrow} size={13} strokeWidth={2} />
+    </button>
+  );
+}
+
+/* ── KPIs ────────────────────────────────────────────────────────────────── */
+
+function KpiTab({ ctx, onOpenKpi }: { ctx: PersonContext; onOpenKpi: (k: PersonKpiRow) => void }) {
+  if (!ctx.kpis.length) {
+    return (
+      <div className={styles.tabEmpty}>
+        No KPIs yet — metrics from the KPIs module whose stakeholder (by email or owner name) is this person appear here.
+      </div>
+    );
+  }
+  return (
+    <>
+      <div className={styles.sectionKicker}>Owns / stakeholder on</div>
+      {ctx.kpis.map((kpi) => {
+        const trend = KPI_TREND_META[kpi.trend];
+        const metricParts = [kpi.status];
+        if (kpi.actual || kpi.target) metricParts.push(`${kpi.actual ?? '—'}${kpi.unit ? ` ${kpi.unit}` : ''} / ${kpi.target ?? '—'}`);
+        return (
+          <button key={kpi.id} type="button" className={`${styles.actionCard} ${styles.linkCard}`} onClick={() => onOpenKpi(kpi)} title="Open KPI">
+            <span className={styles.projectDot} style={{ background: PROJECT_PRIORITY_COLORS[kpi.priority] }} />
+            <div className={styles.actionMain}>
+              <div className={styles.actionTitle}>{kpi.name}</div>
+              <div className={styles.actionMeta}>
+                {metricParts.join(' · ')} · <span style={{ color: trend.color }}>{trend.arrow} {trend.label}</span>
+              </div>
+            </div>
+            <span className={styles.kpiAttn} style={{ color: attainmentColor(kpi.attainment) }}>
+              {kpi.attainment}%
+            </span>
+            <ArrowUpRight className={styles.linkArrow} size={13} strokeWidth={2} />
+          </button>
+        );
+      })}
+    </>
   );
 }
 

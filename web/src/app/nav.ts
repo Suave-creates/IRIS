@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react';
 import { VIEW_PATHS, VIEW_TITLES, type ViewKey } from '@iris/shared';
 import {
+  BarChart,
   Brain,
   Calendar,
   Chat,
@@ -9,6 +10,7 @@ import {
   type IconProps,
   Journal,
   Layers,
+  LayoutWeek,
   Mail,
   Mic,
   Plug,
@@ -36,6 +38,8 @@ export const NAV_ITEMS: NavItem[] = [
   { key: 'chat', label: 'Ask IRIS', path: VIEW_PATHS.chat, Icon: Chat },
   { key: 'dashboard', label: 'Dashboard', path: VIEW_PATHS.dashboard, Icon: Grid },
   { key: 'projects', label: 'Projects', path: VIEW_PATHS.projects, Icon: Folder },
+  { key: 'kpi', label: 'KPIs', path: VIEW_PATHS.kpi, Icon: BarChart },
+  { key: 'planner', label: 'Planner', path: VIEW_PATHS.planner, Icon: LayoutWeek },
   { key: 'mail', label: 'Mail', path: VIEW_PATHS.mail, Icon: Mail },
   { key: 'calendar', label: 'Calendar', path: VIEW_PATHS.calendar, Icon: Calendar },
   { key: 'journal', label: 'Journal', path: VIEW_PATHS.journal, Icon: Journal },

@@ -187,6 +187,12 @@ export async function resolveDriveItem(
 export interface SheetTab {
   title: string;
   values: string[][];
+  /**
+   * Per-cell person/smart-chip email, parallel to `values` (null where a cell has
+   * no chip). Only populated by the rich read — a `@name` person chip renders as a
+   * plain name in `values`, so its underlying email is captured here.
+   */
+  chipEmails?: (string | null)[][];
 }
 
 /** Max worksheets read from one spreadsheet (bounds cost on huge workbooks). */
@@ -230,6 +236,76 @@ export async function readSheetTabs(tenantId: string, externalId: string): Promi
     title,
     values: (ranges[i]?.values ?? []).map((row) => row.map((c) => (c == null ? '' : String(c)))),
   }));
+}
+
+// Shapes for the grid-data read that carries person/smart-chip metadata.
+interface ChipCell {
+  formattedValue?: string;
+  chipRuns?: { chip?: { personProperties?: { email?: string } } }[];
+}
+interface RichSheetObj {
+  properties?: { title?: string };
+  data?: { rowData?: { values?: ChipCell[] }[] }[];
+}
+
+/** First person-chip email in a cell (Sheets smart chips can hold several), else null. */
+function cellChipEmail(cell: ChipCell): string | null {
+  const email = cell.chipRuns?.map((r) => r.chip?.personProperties?.email).find((e) => !!e);
+  return email ? email.trim() : null;
+}
+
+/**
+ * Like readSheetTabs, but reads the grid via spreadsheets.get so each cell's
+ * person/smart-chip email is captured alongside its displayed text. A `@name`
+ * stakeholder chip shows as a plain name in `values` (identical to the values
+ * read) while its email lands in `chipEmails` at the same [row][col].
+ */
+export async function readSheetTabsRich(tenantId: string, externalId: string): Promise<SheetTab[]> {
+  const idEnc = encodeURIComponent(externalId);
+
+  // 1) Enumerate the grid tabs (same as readSheetTabs).
+  const metaQs = new URLSearchParams({ fields: 'sheets.properties(title,sheetType)' }).toString();
+  const meta = await googleClient.get<{ sheets?: { properties?: { title?: string; sheetType?: string } }[] }>(
+    tenantId,
+    `https://sheets.googleapis.com/v4/spreadsheets/${idEnc}?${metaQs}`,
+  );
+  const titles = (meta.sheets ?? [])
+    .map((s) => s.properties)
+    .filter((p) => !p?.sheetType || p.sheetType === 'GRID')
+    .map((p) => p?.title?.trim())
+    .filter((t): t is string => !!t)
+    .slice(0, MAX_TABS);
+  if (titles.length === 0) return [];
+
+  // 2) One grid-data read, bounded to the same A1:AZ500 window per tab, with a
+  //    tight fields mask (formatted text + chip email only) to keep it lean.
+  const params = new URLSearchParams({ includeGridData: 'true' });
+  for (const t of titles) params.append('ranges', tabRange(t));
+  params.append(
+    'fields',
+    'sheets(properties(title),data(rowData(values(formattedValue,chipRuns(chip(personProperties(email)))))))',
+  );
+  const grid = await googleClient.get<{ sheets?: RichSheetObj[] }>(
+    tenantId,
+    `https://sheets.googleapis.com/v4/spreadsheets/${idEnc}?${params.toString()}`,
+  );
+  const byTitle = new Map<string, RichSheetObj>();
+  for (const s of grid.sheets ?? []) {
+    const t = s.properties?.title?.trim();
+    if (t) byTitle.set(t, s);
+  }
+
+  return titles.map((title) => {
+    const rows = byTitle.get(title)?.data?.[0]?.rowData ?? [];
+    const values: string[][] = [];
+    const chipEmails: (string | null)[][] = [];
+    for (const r of rows) {
+      const cells = r.values ?? [];
+      values.push(cells.map((c) => (c.formattedValue == null ? '' : String(c.formattedValue))));
+      chipEmails.push(cells.map(cellChipEmail));
+    }
+    return { title, values, chipEmails };
+  });
 }
 
 /** Flattens all tabs of a sheet into a single labeled text block (for AI text context). */
@@ -381,7 +457,11 @@ export async function readSourceContent(tenantId: string, type: SourceType, exte
   return body.slice(0, FOLDER_MAX);
 }
 
-/** Reads a spreadsheet's tabs whether it's a Google Sheet or an uploaded .xlsx/.xls. */
+/**
+ * Reads a spreadsheet's tabs whether it's a Google Sheet or an uploaded .xlsx/.xls.
+ * Google Sheets use the rich read so stakeholder person-chip emails come through
+ * (`chipEmails`); uploaded Excel has no smart chips, so its `chipEmails` stay unset.
+ */
 export async function readSpreadsheetTabs(tenantId: string, externalId: string): Promise<SheetTab[]> {
   let mime: string | null = null;
   try {
@@ -389,7 +469,7 @@ export async function readSpreadsheetTabs(tenantId: string, externalId: string):
   } catch {
     /* default to Google Sheet path */
   }
-  return isXlsxMime(mime) ? readXlsxTabs(tenantId, externalId) : readSheetTabs(tenantId, externalId);
+  return isXlsxMime(mime) ? readXlsxTabs(tenantId, externalId) : readSheetTabsRich(tenantId, externalId);
 }
 
 /**

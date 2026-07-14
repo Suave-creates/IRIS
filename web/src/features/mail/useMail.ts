@@ -3,16 +3,26 @@ import { mailApi, type MailQuery } from './api';
 
 const mailKey = {
   stats: ['mail', 'stats'] as const,
-  items: (q: MailQuery) => ['mail', 'items', q.category ?? 'all', q.q ?? ''] as const,
+  items: (q: MailQuery) =>
+    [
+      'mail',
+      'items',
+      q.category ?? 'all',
+      q.q ?? '',
+      q.limit ?? 0,
+      q.days ?? 0,
+      q.from ?? '',
+      q.to ?? '',
+      q.taggedMe ? 1 : 0,
+    ] as const,
 };
 
 /**
- * Already-indexed mail items, filtered server-side by category + keyword.
- * `keepPreviousData` holds the prior list while a new filter resolves, so
- * the list never flashes empty when you switch chips or type a keyword.
+ * Already-indexed mail items, filtered server-side by category, keyword, a
+ * last-N-days window, and/or "tagged me". `keepPreviousData` holds the prior
+ * list while a new filter resolves, so the list never flashes empty.
  */
-export function useMailItems(category?: string, q?: string) {
-  const query: MailQuery = { category, q };
+export function useMailItems(query: MailQuery = {}) {
   return useQuery({
     queryKey: mailKey.items(query),
     queryFn: () => mailApi.items(query),

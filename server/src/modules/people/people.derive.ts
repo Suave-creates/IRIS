@@ -1,6 +1,7 @@
 import type {
   EngagementStatus,
   EngagementTrend,
+  KpiTrend,
   PersonActionRow,
   PersonCalendarDay,
   PersonContext,
@@ -8,6 +9,7 @@ import type {
   PersonEngagement,
   PersonFileRow,
   PersonInsightRow,
+  PersonKpiRow,
   PersonProjectRow,
   PersonTimelineEntry,
   PersonTopicRow,
@@ -95,6 +97,21 @@ export interface PersonProjectLite {
   progress: number;
   /** MySQL DATE string or null. */
   deadline: string | null;
+  /** The card's AI-written summary (drives project timeline snippets + topic keywords). */
+  summary: string;
+}
+
+/** A KPI this person is the stakeholder/owner of (read by people.repo). */
+export interface PersonKpiLite {
+  id: string;
+  name: string;
+  status: string;
+  priority: Priority;
+  attainment: number;
+  actual: string | null;
+  target: string | null;
+  unit: string | null;
+  trend: KpiTrend;
 }
 
 // ── Core derivations ────────────────────────────────────────────────────────
@@ -176,12 +193,8 @@ function firstSentence(text: string, max = 160): string {
   return sentence.length > max ? `${sentence.slice(0, max - 1)}…` : sentence;
 }
 
-/** Frequency-ranked topics across the person's real meetings (top 5). */
-function topicRows(meetings: PersonMeetingLite[]): PersonTopicRow[] {
-  const counts = new Map<string, number>();
-  for (const meeting of meetings) {
-    for (const topic of meeting.topics) counts.set(topic, (counts.get(topic) ?? 0) + 1);
-  }
+/** Turns a display→count map into ranked topic bars (top 5). */
+function rankTopics(counts: Map<string, number>): PersonTopicRow[] {
   const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
   const max = ranked[0]?.[1] ?? 1;
   return ranked.map(([name, mentions]) => ({
@@ -189,6 +202,52 @@ function topicRows(meetings: PersonMeetingLite[]): PersonTopicRow[] {
     mentions,
     pct: Math.max(8, Math.round((mentions / max) * 100)),
   }));
+}
+
+/** Frequency of each topic across the person's meetings. */
+function meetingTopicCounts(meetings: PersonMeetingLite[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const meeting of meetings) {
+    for (const topic of meeting.topics) counts.set(topic, (counts.get(topic) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/** Words dropped from project-keyword topics (articles, filler, generic project words). */
+const TOPIC_STOPWORDS = new Set([
+  'the', 'and', 'for', 'with', 'from', 'this', 'that', 'into', 'over', 'per', 'via', 'are', 'was',
+  'will', 'new', 'plan', 'plans', 'phase', 'project', 'projects', 'system', 'systems', 'work',
+  'update', 'updates', 'review', 'based', 'using', 'both', 'all', 'any', 'its', 'has', 'have',
+]);
+
+/**
+ * Recurring significant keywords across the person's projects (names + summaries),
+ * each counted once per project. Preserves the first-seen casing so acronyms like
+ * "ETP"/"RCA" render as written.
+ */
+function projectKeywordStats(projects: PersonProjectLite[]): Map<string, { display: string; count: number }> {
+  const stats = new Map<string, { display: string; count: number }>();
+  for (const project of projects) {
+    const seen = new Set<string>();
+    for (const token of `${project.name} ${project.summary}`.split(/[^A-Za-z0-9]+/)) {
+      const key = token.toLowerCase();
+      if (key.length < 3 || TOPIC_STOPWORDS.has(key) || seen.has(key)) continue;
+      seen.add(key);
+      const cur = stats.get(key);
+      if (cur) cur.count += 1;
+      else stats.set(key, { display: token, count: 1 });
+    }
+  }
+  return stats;
+}
+
+/** Topics tab: the person's meeting topics blended with recurring keywords from their projects (top 5). */
+function topicRows(meetings: PersonMeetingLite[], projects: PersonProjectLite[]): PersonTopicRow[] {
+  const counts = meetingTopicCounts(meetings);
+  for (const { display, count } of projectKeywordStats(projects).values()) {
+    counts.set(display, (counts.get(display) ?? 0) + count);
+  }
+  return rankTopics(counts);
 }
 
 function toActionRow(action: PersonActionLite): PersonActionRow {
@@ -265,11 +324,13 @@ function projectInsight(projects: PersonProjectRow[]): PersonInsightRow | null {
 function insightRows(
   meetings: PersonMeetingLite[],
   actions: PersonActionLite[],
-  topics: PersonTopicRow[],
+  meetingTopics: PersonTopicRow[],
   projects: PersonProjectRow[],
 ): PersonInsightRow[] {
   const insights: PersonInsightRow[] = [];
-  const top = topics[0];
+  // The theme insight is meeting-specific ("N of the last M meetings"), so it uses
+  // meeting-only topics — not the project keywords blended into the Topics tab.
+  const top = meetingTopics[0];
   if (top && meetings.length > 1) {
     insights.push({
       kind: 'theme',
@@ -311,11 +372,14 @@ export function buildPersonContext(
   actions: PersonActionLite[],
   artifacts: PersonArtifactLite[] = [],
   projects: PersonProjectLite[] = [],
+  kpis: PersonKpiLite[] = [],
   now: Date = new Date(),
 ): PersonContext {
   const frame = monthFrame(now);
   const engagement = deriveEngagement(person.days, events, now);
-  const topics = topicRows(meetings);
+  // Topics tab blends meeting topics + project keywords; the theme insight uses meetings only.
+  const topics = topicRows(meetings, projects);
+  const meetingTopics = rankTopics(meetingTopicCounts(meetings));
   const openActions = actions.filter((a) => !a.done).map(toActionRow);
   const doneActions = actions.filter((a) => a.done).map(toActionRow);
   const projectRows = projects.map(toProjectRow);
@@ -360,15 +424,27 @@ export function buildPersonContext(
     });
   }
 
-  const timeline: PersonTimelineEntry[] = meetings.map((meeting) => ({
-    dateLabel: `${weekdayShortOf(meeting.startedAt)} · ${dateLabel(meeting.startedAt)}`,
-    type: 'Meeting',
-    fromMeeting: true,
-    title: `Meeting · ${meeting.title}`,
-    snippet: firstSentence(meeting.summary),
-  }));
+  // Recent meetings first, then the person's projects (by priority/deadline order).
+  const timeline: PersonTimelineEntry[] = [
+    ...meetings.map((meeting) => ({
+      dateLabel: `${weekdayShortOf(meeting.startedAt)} · ${dateLabel(meeting.startedAt)}`,
+      type: 'Meeting' as const,
+      fromMeeting: true,
+      title: `Meeting · ${meeting.title}`,
+      snippet: firstSentence(meeting.summary),
+    })),
+    ...projects.map((project) => ({
+      dateLabel: project.deadline ? `Due · ${dateLabel(project.deadline)}` : 'Ongoing',
+      type: 'Project' as const,
+      fromMeeting: false,
+      title: `Project · ${project.name}`,
+      snippet: project.summary
+        ? `${project.status} · ${project.progress}% — ${firstSentence(project.summary, 120)}`
+        : `${project.status} · ${project.progress}% complete`,
+    })),
+  ];
 
-  const topicNames = topics.slice(0, 3).map((t) => t.name);
+  const topicNames = meetingTopics.slice(0, 3).map((t) => t.name);
   const summary = meetings.length
     ? `Primarily involved in ${person.func} initiatives at ${person.location}. Recent meetings have focused on ${topicNames.join(', ')}. ${openActions.length} action item${openActions.length === 1 ? '' : 's'} open from processed meetings. Cadence is ${freqLabel(person.days).toLowerCase()} and the relationship is ${TREND_WORD[engagement.trend]}.`
     : `Part of ${person.func} at ${person.location}. Cadence is ${freqLabel(person.days).toLowerCase()}. No processed meetings yet — IRIS builds living context here as meetings are recorded.`;
@@ -393,8 +469,25 @@ export function buildPersonContext(
     doneActions,
     // Real projects this person is the stakeholder/owner of (empty until any exist).
     projects: projectRows,
+    // Real KPIs this person is the stakeholder/owner of (empty until any exist).
+    kpis: kpis.map(toKpiRow),
     // Real artifacts extracted from this person's meetings (empty until some exist).
     files: artifacts.map(toFileRow),
-    insights: insightRows(meetings, actions, topics, projectRows),
+    insights: insightRows(meetings, actions, meetingTopics, projectRows),
+  };
+}
+
+/** Maps a KPI-lite row to the drawer KPI-tab DTO (identity shape). */
+function toKpiRow(kpi: PersonKpiLite): PersonKpiRow {
+  return {
+    id: kpi.id,
+    name: kpi.name,
+    status: kpi.status,
+    priority: kpi.priority,
+    attainment: kpi.attainment,
+    actual: kpi.actual,
+    target: kpi.target,
+    unit: kpi.unit,
+    trend: kpi.trend,
   };
 }

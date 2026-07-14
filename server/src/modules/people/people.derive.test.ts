@@ -119,7 +119,7 @@ describe('deriveEngagement', () => {
 });
 
 describe('buildPersonContext (no meetings)', () => {
-  const ctx = buildPersonContext(person, [], [], [], [], [], NOW);
+  const ctx = buildPersonContext(person, [], [], [], [], [], [], NOW);
   it('writes an honest no-meetings summary and no boost banner', () => {
     expect(ctx.summary).toBe(
       'Part of Operations at BWD. Cadence is daily. No processed meetings yet — IRIS builds living context here as meetings are recorded.',
@@ -161,7 +161,7 @@ describe('buildPersonContext (with real meetings)', () => {
     dueDate: null,
     done: true,
   };
-  const ctx = buildPersonContext(person, [boost], [meeting, second], [action, doneAction], [], [], NOW);
+  const ctx = buildPersonContext(person, [boost], [meeting, second], [action, doneAction], [], [], [], NOW);
 
   it('summarizes from real topics and open actions, banner dated with the real event date', () => {
     expect(ctx.summary).toContain('focused on ASRS optimization');
@@ -208,26 +208,28 @@ describe('buildPersonContext (with real meetings)', () => {
 describe('buildPersonContext (stakeholder on real projects)', () => {
   const critical: PersonProjectLite = {
     id: 'proj_1',
-    name: 'Revenue Tracker',
+    name: 'Revenue Tracker Q3',
     status: 'At risk',
     priority: 'critical',
     progress: 30,
     deadline: '2026-07-10',
+    summary: 'Revenue model for quarterly forecasting.',
   };
   const med: PersonProjectLite = {
     id: 'proj_2',
-    name: 'Hiring Plan FY26',
+    name: 'Revenue Planning FY26',
     status: 'Review',
     progress: 70,
     priority: 'med',
     deadline: null,
+    summary: 'Revenue and headcount roadmap.',
   };
-  const ctx = buildPersonContext(person, [], [], [], [], [critical, med], NOW);
+  const ctx = buildPersonContext(person, [], [], [], [], [critical, med], [], NOW);
 
-  it('maps real projects into Actions-tab rows with a formatted deadline', () => {
+  it('maps real projects into Actions-tab rows with a formatted deadline (no summary leaks into the DTO)', () => {
     expect(ctx.projects).toEqual([
-      { id: 'proj_1', name: 'Revenue Tracker', status: 'At risk', priority: 'critical', progress: 30, deadlineLabel: 'Jul 10' },
-      { id: 'proj_2', name: 'Hiring Plan FY26', status: 'Review', priority: 'med', progress: 70, deadlineLabel: null },
+      { id: 'proj_1', name: 'Revenue Tracker Q3', status: 'At risk', priority: 'critical', progress: 30, deadlineLabel: 'Jul 10' },
+      { id: 'proj_2', name: 'Revenue Planning FY26', status: 'Review', priority: 'med', progress: 70, deadlineLabel: null },
     ]);
   });
 
@@ -235,12 +237,54 @@ describe('buildPersonContext (stakeholder on real projects)', () => {
     const insight = ctx.insights.find((i) => i.kind === 'project');
     expect(insight).toBeDefined();
     expect(insight!.text).toBe(
-      'Stakeholder on 2 projects, 1 at high priority or above — most urgent is "Revenue Tracker" (At risk, 30% complete, due Jul 10).',
+      'Stakeholder on 2 projects, 1 at high priority or above — most urgent is "Revenue Tracker Q3" (At risk, 30% complete, due Jul 10).',
     );
   });
 
+  it('surfaces the projects in the timeline (typed Project, dated by deadline)', () => {
+    expect(ctx.timeline).toHaveLength(2);
+    expect(ctx.timeline[0]).toMatchObject({
+      type: 'Project',
+      fromMeeting: false,
+      title: 'Project · Revenue Tracker Q3',
+      dateLabel: 'Due · Jul 10',
+    });
+    expect(ctx.timeline[0]!.snippet).toContain('At risk · 30%');
+    expect(ctx.timeline[1]).toMatchObject({ title: 'Project · Revenue Planning FY26', dateLabel: 'Ongoing' });
+  });
+
+  it('blends recurring project keywords into the Topics tab (once per project)', () => {
+    // "Revenue" appears in both projects' names/summaries → the top topic with 2 mentions.
+    expect(ctx.topics[0]).toMatchObject({ name: 'Revenue', mentions: 2, pct: 100 });
+    // Generic words are filtered out.
+    expect(ctx.topics.some((t) => t.name.toLowerCase() === 'and')).toBe(false);
+  });
+
   it('adds no project insight when the person owns no projects', () => {
-    const empty = buildPersonContext(person, [], [], [], [], [], NOW);
+    const empty = buildPersonContext(person, [], [], [], [], [], [], NOW);
     expect(empty.insights.some((i) => i.kind === 'project')).toBe(false);
+    expect(empty.timeline).toEqual([]);
+    expect(empty.topics).toEqual([]);
+    expect(empty.kpis).toEqual([]);
+  });
+});
+
+describe('buildPersonContext (stakeholder on KPIs)', () => {
+  const kpi = {
+    id: 'kpi_1',
+    name: 'NDD Uptime',
+    status: 'At risk',
+    priority: 'critical' as const,
+    attainment: 74,
+    actual: '98.2%',
+    target: '99.5%',
+    unit: '%',
+    trend: 'down' as const,
+  };
+  it('maps the person’s KPIs into the KPI tab rows', () => {
+    const ctx = buildPersonContext(person, [], [], [], [], [], [kpi], NOW);
+    expect(ctx.kpis).toEqual([
+      { id: 'kpi_1', name: 'NDD Uptime', status: 'At risk', priority: 'critical', attainment: 74, actual: '98.2%', target: '99.5%', unit: '%', trend: 'down' },
+    ]);
   });
 });

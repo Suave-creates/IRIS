@@ -163,7 +163,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 60;
+  /* Above the People drawer (z 71) so a project/KPI card can open over it. */
+  z-index: 90;
   padding: 24px;
   animation: irisRise 0.2s ease;
 }

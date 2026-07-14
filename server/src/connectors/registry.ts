@@ -20,7 +20,7 @@ export interface ConnectorDef {
 export const CONNECTORS: Record<ConnectorProvider, ConnectorDef> = {
   gmail: {
     provider: 'gmail', displayName: 'Gmail', group: 'Google Workspace', capabilities: 'Read · Draft · Send',
-    google: true, sync: ({ tenantId }) => syncGmail(tenantId),
+    google: true, sync: ({ tenantId, userId }) => syncGmail(tenantId, userId),
   },
   gcalendar: {
     provider: 'gcalendar', displayName: 'Calendar', group: 'Google Workspace', capabilities: 'Read · Create · Update',

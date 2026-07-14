@@ -1,11 +1,12 @@
 import type { RowDataPacket } from 'mysql2/promise';
-import type { Person, PersonCategory, PersonFunction, PersonInput, PersonLocation, Priority } from '@iris/shared';
+import type { KpiTrend, Person, PersonCategory, PersonFunction, PersonInput, PersonLocation, Priority } from '@iris/shared';
 import { execute, query, withTransaction } from '../../db/pool.js';
 import { id } from '../../lib/ids.js';
 import type {
   EngagementEventLite,
   PersonActionLite,
   PersonArtifactLite,
+  PersonKpiLite,
   PersonMeetingLite,
   PersonProjectLite,
 } from './people.derive.js';
@@ -122,6 +123,19 @@ interface PersonProjectRowDb extends RowDataPacket {
   priority: Priority;
   progress: number;
   deadline: string | null;
+  summary: string | null;
+}
+
+interface PersonKpiRowDb extends RowDataPacket {
+  id: string;
+  name: string;
+  status: string;
+  priority: Priority;
+  attainment: number;
+  actual: string | null;
+  target: string | null;
+  unit: string | null;
+  trend: KpiTrend;
 }
 
 /** Parse one meeting's artifacts JSON column defensively ({kind,label,ref} rows only). */
@@ -279,7 +293,7 @@ export const peopleRepo = {
   async projectsForPerson(tenantId: string, personName: string, personEmail: string | null): Promise<PersonProjectLite[]> {
     const firstName = personName.trim().split(/\s+/)[0] ?? personName;
     const rows = await query<PersonProjectRowDb[]>(
-      `SELECT id, name, status, priority, progress, deadline
+      `SELECT id, name, status, priority, progress, deadline, summary
          FROM projects
         WHERE tenant_id = :tid
           AND (
@@ -297,6 +311,38 @@ export const peopleRepo = {
       priority: r.priority,
       progress: r.progress,
       deadline: r.deadline,
+      summary: r.summary ?? '',
+    }));
+  },
+
+  /**
+   * Real KPIs this person is the stakeholder/owner of. Same email-first, name-fallback
+   * rule as projectsForPerson (kpi.owner_email = person.email; else owner name).
+   */
+  async kpisForPerson(tenantId: string, personName: string, personEmail: string | null): Promise<PersonKpiLite[]> {
+    const firstName = personName.trim().split(/\s+/)[0] ?? personName;
+    const rows = await query<PersonKpiRowDb[]>(
+      `SELECT id, name, status, priority, attainment, actual, target, unit, trend
+         FROM kpis
+        WHERE tenant_id = :tid
+          AND (
+            (:hasEmail = 1 AND LOWER(owner_email) = LOWER(:email))
+            OR (owner_email IS NULL AND LOWER(TRIM(owner)) IN (LOWER(:first), LOWER(:full)))
+          )
+        ORDER BY FIELD(priority, 'critical', 'high', 'med', 'low'), attainment, name
+        LIMIT 50`,
+      { tid: tenantId, hasEmail: personEmail ? 1 : 0, email: personEmail ?? '', first: firstName, full: personName.trim() },
+    );
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      status: r.status,
+      priority: r.priority,
+      attainment: r.attainment,
+      actual: r.actual,
+      target: r.target,
+      unit: r.unit,
+      trend: r.trend,
     }));
   },
 

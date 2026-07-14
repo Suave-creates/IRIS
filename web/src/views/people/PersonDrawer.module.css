@@ -485,6 +485,32 @@
 .actionCardDone {
   background: var(--surface-2);
 }
+/* Clickable project/KPI row that opens its detail card. */
+.linkCard {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  align-items: center;
+}
+.linkCard:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.linkArrow {
+  color: var(--text-3);
+  flex: none;
+}
+.linkCard:hover .linkArrow {
+  color: var(--accent);
+}
+.kpiAttn {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  flex: none;
+}
 .checkbox {
   width: 15px;
   height: 15px;

@@ -32,19 +32,30 @@ function catMeta(key: string) {
   return CATEGORY_META[key] ?? { label: key.charAt(0).toUpperCase() + key.slice(1), tone: 'var(--text-2)' };
 }
 
-const SCOPE_TABS = ['Recent', 'Date range'] as const;
+const SCOPE_TABS = ['Recent', 'Last 7 days', 'Date range'] as const;
 const RECENT_OPTIONS = ['25 most recent', '50', '100', '200'] as const;
+const RECENT_LIMITS = [25, 50, 100, 200] as const;
 const SUGGESTED_KEYWORDS = ['invoice', 'renewal', 'deadline', 'board'] as const;
 
 export function Mail() {
   const [scope, setScope] = useState<(typeof SCOPE_TABS)[number]>('Recent');
   const [recentN, setRecentN] = useState(0);
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
   const [category, setCategory] = useState<string>('all');
   const [keyword, setKeyword] = useState('');
   const [kwInput, setKwInput] = useState('');
+  const [taggedMe, setTaggedMe] = useState(false);
 
   const stats = useMailStats();
-  const items = useMailItems(category, keyword);
+  // The scope box drives the date/count window; "tagged me" and category/keyword layer on top.
+  const scopeQuery =
+    scope === 'Recent'
+      ? { limit: RECENT_LIMITS[recentN] }
+      : scope === 'Last 7 days'
+        ? { days: 7 }
+        : { from: from || undefined, to: to || undefined };
+  const items = useMailItems({ category, q: keyword, taggedMe, ...scopeQuery });
   const syncMail = useSyncMail();
   const syncErr = syncMail.error instanceof ApiError ? syncMail.error.message : null;
 
@@ -75,8 +86,8 @@ export function Mail() {
         </p>
       </header>
 
-      {/* Scope control row — visual only; live fetch + summarize arrives with the AI engine (M3). */}
-      <section className={styles.scopeBar} aria-label="Fetch scope">
+      {/* Scope + filters — one coherent box over the already-indexed mail. */}
+      <section className={styles.scopeBar} aria-label="Scope & filters">
         <div className={styles.scopeGroup}>
           <span className={styles.scopeLabel}>Scope</span>
           <div className={styles.segmented} role="tablist">
@@ -94,7 +105,7 @@ export function Mail() {
           </div>
         </div>
 
-        {scope === 'Recent' ? (
+        {scope === 'Recent' && (
           <div className={styles.scopeGroup}>
             <span className={styles.scopeLabel}>Most recent messages</span>
             <div className={styles.recentOpts}>
@@ -109,18 +120,46 @@ export function Mail() {
               ))}
             </div>
           </div>
-        ) : (
+        )}
+
+        {scope === 'Date range' && (
           <div className={styles.dateRange}>
             <label className={styles.dateField}>
               <span className={styles.scopeLabel}>From</span>
-              <input type="date" className={styles.dateInput} aria-label="From date" />
+              <input
+                type="date"
+                className={styles.dateInput}
+                value={from}
+                max={to || undefined}
+                onChange={(e) => setFrom(e.target.value)}
+                aria-label="From date"
+              />
             </label>
             <label className={styles.dateField}>
               <span className={styles.scopeLabel}>To</span>
-              <input type="date" className={styles.dateInput} aria-label="To date" />
+              <input
+                type="date"
+                className={styles.dateInput}
+                value={to}
+                min={from || undefined}
+                onChange={(e) => setTo(e.target.value)}
+                aria-label="To date"
+              />
             </label>
           </div>
         )}
+
+        <div className={styles.scopeGroup}>
+          <span className={styles.scopeLabel}>Show</span>
+          <button
+            className={taggedMe ? styles.filterToggleOn : styles.filterToggle}
+            aria-pressed={taggedMe}
+            onClick={() => setTaggedMe((v) => !v)}
+            title="Only messages where you're tagged in the body"
+          >
+            Tagged me
+          </button>
+        </div>
 
         <button
           className={styles.fetchBtn}
@@ -155,10 +194,10 @@ export function Mail() {
         </span>
       </section>
 
-      {/* Honesty note: the deferred live-fetch pipeline. */}
+      {/* Honesty note: what the box controls vs. what the Fetch button does. */}
       <p className={styles.deferNote}>
-        Live fetch &amp; batch summarization arrives with the AI engine. Below is the already-indexed mail,
-        filtered by category and keyword.
+        Scope, date range, &ldquo;tagged me&rdquo;, category and keyword all filter the already-indexed mail below.
+        &ldquo;Fetch &amp; summarize&rdquo; pulls fresh Gmail and re-triages it.
       </p>
 
       {/* Category filter chips */}
@@ -267,6 +306,11 @@ function MailRow({ item }: { item: MailItem }) {
           >
             {meta.label}
           </span>
+          {item.mentionsMe && (
+            <span className={styles.taggedBadge} title="You're tagged in this message">
+              @ Tagged
+            </span>
+          )}
           <time className={styles.date}>{formatDate(item.receivedAt)}</time>
         </div>
         <div className={styles.subject}>{item.subject}</div>

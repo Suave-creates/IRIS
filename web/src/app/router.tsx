@@ -10,6 +10,8 @@ import { Chat } from '@/views/Chat';
 import { Lens } from '@/views/Lens';
 import { Dashboard } from '@/views/Dashboard';
 import { Projects } from '@/views/Projects';
+import { Kpi } from '@/views/Kpi';
+import { Planner } from '@/views/Planner';
 import { Whiteboard } from '@/views/Whiteboard';
 import { Journal } from '@/views/Journal';
 import { People } from '@/views/People';
@@ -36,6 +38,8 @@ export const router = createBrowserRouter([
           { path: p(VIEW_PATHS.onboarding), element: <Welcome /> },
           { path: p(VIEW_PATHS.chat), element: <Chat /> },
           { path: p(VIEW_PATHS.projects), element: <Projects /> },
+          { path: p(VIEW_PATHS.kpi), element: <Kpi /> },
+          { path: p(VIEW_PATHS.planner), element: <Planner /> },
           { path: p(VIEW_PATHS.mail), element: <Mail /> },
           { path: p(VIEW_PATHS.calendar), element: <Calendar /> },
           { path: p(VIEW_PATHS.journal), element: <Journal /> },

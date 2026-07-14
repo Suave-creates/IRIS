@@ -13,6 +13,7 @@ interface MailItemRow extends RowDataPacket {
   priority: 'high' | 'med' | 'low';
   received_at: string;
   tags: string | null;
+  mentions_me: number;
 }
 
 interface CategoryCountRow extends RowDataPacket {
@@ -49,7 +50,16 @@ function toMailItem(row: MailItemRow): MailItem {
     priority: row.priority,
     receivedAt: row.received_at,
     tags: parseTags(row.tags),
+    mentionsMe: row.mentions_me === 1,
   };
+}
+
+/** YYYY-MM-DD for `n` days before `now` (the "last N days" window start). */
+function sinceDate(days: number, now: Date = new Date()): string {
+  const d = new Date(now);
+  d.setDate(d.getDate() - days);
+  const pad = (x: number) => String(x).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 export interface ListMailFilter {
@@ -57,6 +67,16 @@ export interface ListMailFilter {
   category?: string;
   /** Case-insensitive keyword matched against subject/summary/from_name/tags. */
   q?: string;
+  /** Only messages received within the last N days (received_at >= today − N). */
+  days?: number;
+  /** Date-range start (inclusive), YYYY-MM-DD. */
+  from?: string;
+  /** Date-range end (inclusive), YYYY-MM-DD. */
+  to?: string;
+  /** Cap the result to the N most recent messages. */
+  limit?: number;
+  /** Only messages where the mailbox owner is tagged in the body. */
+  taggedMe?: boolean;
 }
 
 export const mailRepo = {
@@ -83,7 +103,31 @@ export const mailRepo = {
       params.kw = `%${escapeLike(keyword)}%`;
     }
 
+    if (filter.days && filter.days > 0) {
+      sql += ' AND received_at >= :since';
+      params.since = sinceDate(filter.days);
+    }
+
+    if (filter.from) {
+      sql += ' AND received_at >= :from';
+      params.from = filter.from;
+    }
+    if (filter.to) {
+      sql += ' AND received_at <= :to';
+      params.to = filter.to;
+    }
+
+    if (filter.taggedMe) {
+      sql += ' AND mentions_me = 1';
+    }
+
     sql += ' ORDER BY received_at DESC';
+
+    // LIMIT takes a validated positive integer — inline it (mysql2 placeholders in
+    // LIMIT are unreliable across versions).
+    if (filter.limit && filter.limit > 0) {
+      sql += ` LIMIT ${Math.floor(filter.limit)}`;
+    }
 
     const rows = await query<MailItemRow[]>(sql, params);
     return rows.map(toMailItem);

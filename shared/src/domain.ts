@@ -40,8 +40,6 @@ export interface Project {
   deadline: string | null;
   progress: number;
   owner: string;
-  /** Stakeholder's email, when the source (or a manual edit) actually states one — links to People by email. */
-  ownerEmail: string | null;
   auto: boolean;
   summary: string;
   sourceDetail: string | null;
@@ -82,10 +80,119 @@ export interface UpdateProjectInput {
   deadline?: string | null;
   status?: string;
   owner?: string;
-  ownerEmail?: string | null;
   summary?: string;
   progress?: number;
   currentStage?: number;
+}
+
+// ── KPIs ──────────────────────────────────────────────────────────────────
+// The KPI module mirrors Projects (linked sources → AI extraction, manual add,
+// key-details, initiatives, activity) but is modeled around a metric: an actual
+// value measured against a target, with a unit, review period, and trend.
+export type KpiTrend = 'up' | 'down' | 'flat';
+
+export interface KpiField {
+  id: string;
+  label: string;
+  value: string;
+}
+/** An initiative/action taken to move the metric (the KPI analogue of a project task). */
+export interface KpiInitiative {
+  id: string;
+  title: string;
+  done: boolean;
+}
+export interface KpiActivity {
+  who: string;
+  act: string;
+  time: string;
+}
+export interface Kpi {
+  id: string;
+  name: string;
+  source: ProjectSourceType;
+  priority: Priority;
+  status: string; // e.g. On track, At risk, Off track, Exceeded
+  owner: string;
+  auto: boolean;
+  summary: string;
+  sourceDetail: string | null;
+  /** Measurement unit, e.g. "%", "days", "M", "count". */
+  unit: string | null;
+  /** Target value as displayed (may be non-numeric, e.g. "≤ 2 days"). */
+  target: string | null;
+  /** Latest actual/current value as displayed. */
+  actual: string | null;
+  trend: KpiTrend;
+  /** Review period, e.g. "Jun 2026", "Q3 FY26". */
+  period: string | null;
+  /** Attainment against target, 0–100, for the progress bar. */
+  attainment: number;
+  fields: KpiField[];
+  initiatives: KpiInitiative[];
+  activity: KpiActivity[];
+}
+export interface CreateKpiInput {
+  name: string;
+  priority: Priority;
+  unit?: string | null;
+  target?: string | null;
+  period?: string | null;
+  /** Optional context IRIS uses to write the KPI summary. */
+  description?: string | null;
+}
+/** Partial update for "edit everything" on a KPI card. */
+export interface UpdateKpiInput {
+  name?: string;
+  priority?: Priority;
+  status?: string;
+  owner?: string;
+  summary?: string;
+  unit?: string | null;
+  target?: string | null;
+  actual?: string | null;
+  trend?: KpiTrend;
+  period?: string | null;
+  attainment?: number;
+}
+
+// ── Planner (macro weekly planning) ─────────────────────────────────────────
+// A lightweight per-user planner: macro-task "blocks" anchored to real dates,
+// viewed by day / week (default) / month. A full-day block renders stretched.
+export interface PlannerBlock {
+  id: string;
+  date: string; // YYYY-MM-DD — the first day the block covers
+  title: string;
+  fullDay: boolean;
+  /** Number of consecutive days the block covers (1 = single day). */
+  span: number;
+  /** One of the PLANNER_COLORS keys; drives the block accent. */
+  color: string;
+  /** Ordering within a day (ascending). */
+  position: number;
+  notes: string | null;
+}
+export interface PlannerBlockInput {
+  date: string;
+  title: string;
+  fullDay?: boolean;
+  span?: number;
+  color?: string;
+  notes?: string | null;
+}
+export interface UpdatePlannerBlockInput {
+  date?: string;
+  title?: string;
+  fullDay?: boolean;
+  span?: number;
+  color?: string;
+  position?: number;
+  notes?: string | null;
+}
+/** Move/reorder a day's blocks: the full ordered id list now belonging to `date`. */
+export interface PlannerReorderInput {
+  date: string;
+  ids: string[];
 }
 
 // ── Journal ───────────────────────────────────────────────────────────────
@@ -111,7 +218,7 @@ export interface JournalTaskInput {
 // ── People & Context ────────────────────────────────────────────────────────
 export type EngagementTrend = 'rising' | 'steady' | 'cooling';
 export type EngagementStatus = 'Highly Active' | 'Active' | 'Moderate' | 'Low Activity' | 'Dormant';
-export type PersonInteractionType = 'Meeting' | 'Call' | 'Discussion' | 'Note';
+export type PersonInteractionType = 'Meeting' | 'Call' | 'Discussion' | 'Note' | 'Project';
 
 /** Server-computed engagement, derived from cadence + engagement events. */
 export interface PersonEngagement {
@@ -216,6 +323,18 @@ export interface PersonProjectRow {
   progress: number;
   deadlineLabel: string | null;
 }
+/** A KPI this person is the stakeholder/owner of (matched by email, else name). */
+export interface PersonKpiRow {
+  id: string;
+  name: string;
+  status: string;
+  priority: Priority;
+  attainment: number;
+  actual: string | null;
+  target: string | null;
+  unit: string | null;
+  trend: KpiTrend;
+}
 /** The full drawer payload for one person (GET /api/people/:id/context). */
 export interface PersonContext {
   summary: string;
@@ -233,6 +352,8 @@ export interface PersonContext {
   doneActions: PersonActionRow[];
   /** Real projects this person is the stakeholder/owner of (shown on the Actions tab). */
   projects: PersonProjectRow[];
+  /** Real KPIs this person is the stakeholder/owner of (shown on the KPI tab). */
+  kpis: PersonKpiRow[];
   files: PersonFileRow[];
   insights: PersonInsightRow[];
 }
@@ -384,6 +505,8 @@ export interface MailItem {
   priority: TaskPriority;
   receivedAt: string; // YYYY-MM-DD
   tags: string[];
+  /** True when the mailbox owner is tagged in the message BODY (their email/name/@handle appears). */
+  mentionsMe: boolean;
 }
 export interface MailStats {
   indexed: number;

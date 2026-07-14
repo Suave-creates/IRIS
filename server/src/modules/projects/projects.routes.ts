@@ -40,7 +40,6 @@ const updateProjectSchema = z.object({
   deadline: z.string().trim().max(40).nullable().optional(),
   status: z.string().trim().min(1).max(40).optional(),
   owner: z.string().trim().min(1).max(160).optional(),
-  ownerEmail: z.string().trim().toLowerCase().email().max(255).nullable().optional(),
   summary: z.string().trim().max(2000).optional(),
   progress: z.number().int().min(0).max(100).optional(),
   currentStage: z.number().int().min(0).max(20).optional(),

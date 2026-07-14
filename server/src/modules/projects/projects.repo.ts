@@ -23,7 +23,6 @@ interface ProjectRow extends RowDataPacket {
   deadline: string | null;
   progress: number;
   owner: string;
-  owner_email: string | null;
   auto: number;
   summary: string | null;
   source_detail: string | null;
@@ -159,7 +158,6 @@ function toProject(p: ProjectRow, c: Children): Project {
     deadline: p.deadline ?? null,
     progress: p.progress,
     owner: p.owner,
-    ownerEmail: p.owner_email ?? null,
     auto: p.auto === 1,
     summary: p.summary ?? '',
     sourceDetail: p.source_detail ?? null,
@@ -473,17 +471,7 @@ export const projectsRepo = {
   async updateProject(
     tenantId: string,
     projectId: string,
-    patch: {
-      name?: string;
-      priority?: Priority;
-      deadline?: string | null;
-      status?: string;
-      owner?: string;
-      ownerEmail?: string | null;
-      summary?: string;
-      progress?: number;
-      currentStage?: number;
-    },
+    patch: { name?: string; priority?: Priority; deadline?: string | null; status?: string; owner?: string; summary?: string; progress?: number; currentStage?: number },
   ): Promise<boolean> {
     const r = await execute(
       `UPDATE projects SET
@@ -492,7 +480,6 @@ export const projectsRepo = {
          deadline = IF(:deadlineSet, :deadline, deadline),
          status = COALESCE(:status, status),
          owner = COALESCE(:owner, owner),
-         owner_email = IF(:ownerEmailSet, :ownerEmail, owner_email),
          summary = COALESCE(:summary, summary),
          progress = COALESCE(:progress, progress),
          current_stage = COALESCE(:currentStage, current_stage)
@@ -505,8 +492,6 @@ export const projectsRepo = {
         deadline: patch.deadline ?? null,
         status: patch.status ?? null,
         owner: patch.owner ?? null,
-        ownerEmailSet: patch.ownerEmail !== undefined ? 1 : 0,
-        ownerEmail: patch.ownerEmail ?? null,
         summary: patch.summary ?? null,
         progress: patch.progress ?? null,
         currentStage: patch.currentStage ?? null,
@@ -577,7 +562,8 @@ export const projectsRepo = {
     source: { type: ProjectSourceType; name: string; externalId: string },
     list: {
       name: string; summary: string; priority: Priority; deadline: string | null; status: string;
-      owner?: string | null; ownerEmail?: string | null;
+      /** Stakeholder email, captured silently for People-linking — never shown/edited in the Projects UI. */
+      ownerEmail?: string | null;
       fields: { label: string; value: string }[]; tasks: { title: string }[]; stages: string[]; currentStage: number;
     }[],
   ): Promise<void> {
@@ -592,16 +578,14 @@ export const projectsRepo = {
         const currentStage = Math.max(0, Math.min(ex.currentStage, stages.length - 1));
         const progress = Math.round(((currentStage + 1) / stages.length) * 100);
         const projectId = id('proj');
-        // The real stakeholder name/email when the source states one; 'IRIS' marks an auto-discovered card with no named owner.
-        const owner = ex.owner?.trim() || 'IRIS';
         await conn.execute(
           `INSERT INTO projects
              (id, tenant_id, name, source, priority, status, deadline, progress, owner, owner_email, auto, summary, source_detail, source_ref, stages, current_stage)
            VALUES
-             (:id, :tid, :name, :source, :priority, :status, :deadline, :progress, :owner, :ownerEmail, 1, :summary, :detail, :ref, :stages, :stage)`,
+             (:id, :tid, :name, :source, :priority, :status, :deadline, :progress, 'IRIS', :ownerEmail, 1, :summary, :detail, :ref, :stages, :stage)`,
           {
             id: projectId, tid: tenantId, name: ex.name.slice(0, 200), source: source.type, priority: ex.priority,
-            status: ex.status.slice(0, 40), deadline: ex.deadline, progress, owner, ownerEmail: ex.ownerEmail ?? null,
+            status: ex.status.slice(0, 40), deadline: ex.deadline, progress, ownerEmail: ex.ownerEmail ?? null,
             summary: ex.summary, detail: `${source.type} · ${source.name}`, ref: source.externalId,
             stages: JSON.stringify(stages), stage: currentStage,
           } as never,

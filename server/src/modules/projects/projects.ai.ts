@@ -10,9 +10,11 @@ export interface ExtractedProject {
   priority: Priority;
   deadline: string | null;
   status: string;
-  /** Stakeholder/owner name, when the source states one (e.g. an Owner/POC/Assigned-to column). */
-  owner: string | null;
-  /** Stakeholder's email, ONLY when the source literally contains one — never inferred/guessed. */
+  /**
+   * Stakeholder's email, ONLY when the source literally contains one (e.g. next to an
+   * Owner/POC/Assigned-to column) — never inferred/guessed. Stored silently for
+   * People-linking; not shown or editable in the Projects UI.
+   */
   ownerEmail: string | null;
   fields: { label: string; value: string }[];
   tasks: { title: string }[];
@@ -28,21 +30,16 @@ const PROJECT_ITEM_SCHEMA = {
     priority: { type: 'string', enum: ['critical', 'high', 'med', 'low'] },
     deadline: { type: 'string', description: 'YYYY-MM-DD if a clear deadline exists, else empty string' },
     status: { type: 'string', description: 'e.g. Planning, In progress, Review, At risk, Blocked, On track' },
-    owner: {
-      type: 'string',
-      description:
-        'The stakeholder/owner\'s real name, if the source names one (an Owner/POC/Stakeholder/Assigned-to column ' +
-        'or similar). Empty string if no specific person is named.',
-    },
     ownerEmail: {
       type: 'string',
       description:
-        'The stakeholder\'s email address, ONLY if the source literally contains one next to their name. ' +
-        'Never invent or guess an email from a name. Empty string if none is present.',
+        'The project stakeholder/owner\'s email address, ONLY if the source literally contains one (e.g. in or ' +
+        'next to an Owner/POC/Stakeholder/Assigned-to column). Never invent or guess an email from a name. ' +
+        'Empty string if none is present.',
     },
     fields: {
       type: 'array',
-      description: '3–5 key facts as label/value pairs (exclude owner/stakeholder — that has its own field above)',
+      description: '3–5 key facts as label/value pairs',
       items: { type: 'object', properties: { label: { type: 'string' }, value: { type: 'string' } }, required: ['label', 'value'] },
     },
     tasks: {
@@ -53,7 +50,7 @@ const PROJECT_ITEM_SCHEMA = {
     stages: { type: 'array', items: { type: 'string' }, description: 'Ordered milestone names' },
     currentStage: { type: 'integer', description: 'Index into stages of the current milestone' },
   },
-  required: ['name', 'summary', 'priority', 'status', 'owner', 'ownerEmail', 'fields', 'tasks', 'stages', 'currentStage'],
+  required: ['name', 'summary', 'priority', 'status', 'ownerEmail', 'fields', 'tasks', 'stages', 'currentStage'],
 };
 
 const EXTRACT_TOOL: Anthropic.Tool = {
@@ -96,17 +93,11 @@ const VALID_PRIORITY = new Set<Priority>(['critical', 'high', 'med', 'low']);
 /** Loose email shape check — good enough to reject obvious non-emails without over-validating. */
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/** Trims a possibly-empty raw string; empty/non-string becomes null. */
-function normalizeOptionalText(raw: unknown, maxLen: number): string | null {
-  if (typeof raw !== 'string') return null;
-  const trimmed = raw.trim();
-  return trimmed ? trimmed.slice(0, maxLen) : null;
-}
-
 /** Only accepts a value that actually looks like an email; anything else (hallucinated or malformed) is dropped. */
 function normalizeOwnerEmail(raw: unknown): string | null {
-  const text = normalizeOptionalText(raw, 255);
-  return text && EMAIL_RE.test(text) ? text.toLowerCase() : null;
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim().slice(0, 255);
+  return trimmed && EMAIL_RE.test(trimmed) ? trimmed.toLowerCase() : null;
 }
 
 /** Coerces one raw tool-emitted project object into a safe ExtractedProject. */
@@ -132,7 +123,6 @@ export function normalizeProject(raw: Record<string, unknown>, sourceName: strin
     priority,
     status: (typeof raw.status === 'string' && raw.status.trim()) || 'In progress',
     deadline: normalizeDeadline(raw.deadline),
-    owner: normalizeOptionalText(raw.owner, 160),
     ownerEmail: normalizeOwnerEmail(raw.ownerEmail),
     fields: fields.length ? fields : [{ label: 'Source', value: sourceName }],
     tasks,
@@ -156,7 +146,6 @@ export async function extractProjects(
     priority: 'med',
     status: 'In progress',
     deadline: null,
-    owner: null,
     ownerEmail: null,
     fields: [{ label: 'Source', value: sourceName }],
     tasks: [],
@@ -174,9 +163,8 @@ export async function extractProjects(
           `Ignore boilerplate, navigation, signatures, repeated headers, totals, and empty or irrelevant rows. ` +
           `For each project write a tight, action-oriented summary, a sensible priority and status, 3–5 key fields, ` +
           `realistic ordered stages with the current index, and up to 5 concrete next tasks. ` +
-          `If the source names a real stakeholder/owner (an Owner/POC/Stakeholder/Assigned-to column or similar), ` +
-          `capture their name in "owner", and their email in "ownerEmail" ONLY if the source literally states one — ` +
-          `never invent or guess an email from a name. ` +
+          `If a stakeholder/owner column (Owner/POC/Stakeholder/Assigned-to or similar) literally contains an email ` +
+          `address, capture it in "ownerEmail" — never invent or guess one from a name. ` +
           `If the source contains no real project, return an empty projects array.`,
       ),
       messages: [{ role: 'user', content: `Source: ${sourceName} (${type})\n\nContent:\n"""${content}"""` }],
@@ -200,15 +188,26 @@ export async function extractProjects(
 
 // ── Structured sheet extraction (one card per row, chunked + parallel) ──────────
 
-/** Picks the most label-dense row among the first few as the header. */
+/**
+ * A header cell is a short, single-line label. Data cells in real trackers often
+ * hold long, multi-line prose (descriptions, remarks, multi-date timelines), so
+ * counting label-like cells — not raw fill — separates the header from a data row
+ * that happens to have more populated columns.
+ */
+function isLabelCell(cell: string): boolean {
+  const t = cell.trim();
+  return t.length > 0 && t.length <= 40 && !t.includes('\n');
+}
+
+/** Picks the most label-like row among the first few as the header. */
 export function pickHeader(values: string[][]): { headerIdx: number; header: string[] } {
   let bestIdx = 0;
-  let bestCount = -1;
+  let bestScore = -1;
   const limit = Math.min(values.length, 6);
   for (let i = 0; i < limit; i++) {
-    const count = values[i]!.filter((c) => c.trim()).length;
-    if (count > bestCount) {
-      bestCount = count;
+    const score = values[i]!.filter(isLabelCell).length;
+    if (score > bestScore) {
+      bestScore = score;
       bestIdx = i;
     }
   }
@@ -241,12 +240,68 @@ async function runPooled<T, R>(items: T[], limit: number, fn: (item: T) => Promi
 export interface SheetTabInput {
   title: string;
   values: string[][];
+  /** Per-cell person/smart-chip email, parallel to `values` (null where none). */
+  chipEmails?: (string | null)[][];
 }
 
 interface SheetChunk {
   tab: string;
   headerLine: string;
   records: string;
+  /** normalized project-name → stakeholder chip email, for this chunk's tab. */
+  emailByName: Map<string, string>;
+}
+
+// Header words that identify the stakeholder/owner column and the project-name column.
+const STAKEHOLDER_COL_RE = /stake|owner|poc\b|dri\b|spoc|assign|responsibl|point of contact/i;
+const NAME_COL_RE = /project|initiative|title|\bname\b|task|item|deliverable/i;
+
+/** Case/space-insensitive key for matching an extracted project name back to its source row. */
+export function normalizeProjectName(name: string): string {
+  return name.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+/** First header column index matching `re`, or -1. */
+function headerColIndex(header: string[], re: RegExp): number {
+  return header.findIndex((h) => re.test(h ?? ''));
+}
+
+/** The stakeholder email for a row: prefer the stakeholder column's chip, else the first chip in the row. */
+function rowStakeholderEmail(chips: (string | null)[], stakeCol: number): string | null {
+  if (stakeCol >= 0 && chips[stakeCol]) return normalizeOwnerEmail(chips[stakeCol]);
+  return normalizeOwnerEmail(chips.find((c) => !!c) ?? null);
+}
+
+/**
+ * Maps each row's project name → its stakeholder person-chip email, so an
+ * AI-extracted project (which uses the name column verbatim) can be linked back
+ * to the real email deterministically — the email never enters the AI prompt, so
+ * it can never leak into a project's visible fields. Names that map to conflicting
+ * emails are dropped (ambiguous).
+ */
+export function buildOwnerEmailByName(
+  header: string[],
+  rows: string[][],
+  chipRows: (string | null)[][],
+): Map<string, string> {
+  const nameCol = Math.max(0, headerColIndex(header, NAME_COL_RE));
+  const stakeCol = headerColIndex(header, STAKEHOLDER_COL_RE);
+  const map = new Map<string, string>();
+  const conflicted = new Set<string>();
+  rows.forEach((row, i) => {
+    const email = rowStakeholderEmail(chipRows[i] ?? [], stakeCol);
+    if (!email) return;
+    const key = normalizeProjectName(row[nameCol] ?? '');
+    if (!key || conflicted.has(key)) return;
+    const existing = map.get(key);
+    if (existing && existing !== email) {
+      map.delete(key);
+      conflicted.add(key);
+      return;
+    }
+    map.set(key, email);
+  });
+  return map;
 }
 
 /**
@@ -261,7 +316,6 @@ export async function extractProjectsFromSheet(sourceName: string, tabs: SheetTa
     priority: 'med',
     status: 'In progress',
     deadline: null,
-    owner: null,
     ownerEmail: null,
     fields: [{ label: 'Source', value: sourceName }],
     tasks: [],
@@ -278,8 +332,21 @@ export async function extractProjectsFromSheet(sourceName: string, tabs: SheetTa
   for (const tab of nonEmptyTabs) {
     if (usedRows >= MAX_SHEET_DATA_ROWS) break;
     const { headerIdx, header } = pickHeader(tab.values);
-    const dataRows = tab.values.slice(headerIdx + 1).filter((r) => r.some((c) => c.trim()));
-    if (dataRows.length === 0) continue;
+    // Zip each data row with its parallel chip-email row BEFORE filtering, so the
+    // stakeholder email stays aligned to its row after empty rows are dropped.
+    const chipGrid = tab.chipEmails ?? [];
+    const dataPairs = tab.values
+      .slice(headerIdx + 1)
+      .map((row, i) => ({ row, chips: chipGrid[headerIdx + 1 + i] ?? [] }))
+      .filter(({ row }) => row.some((c) => c.trim()));
+    if (dataPairs.length === 0) continue;
+    const dataRows = dataPairs.map((p) => p.row);
+    // Real stakeholder chip email keyed by project name, for post-AI linking.
+    const emailByName = buildOwnerEmailByName(
+      header,
+      dataRows,
+      dataPairs.map((p) => p.chips),
+    );
     const headerLine = header.map((h, i) => h.trim() || `Column ${i + 1}`).join(' | ');
     for (let i = 0; i < dataRows.length && usedRows < MAX_SHEET_DATA_ROWS; i += SHEET_ROW_CHUNK) {
       const slice = dataRows.slice(i, i + SHEET_ROW_CHUNK);
@@ -289,7 +356,7 @@ export async function extractProjectsFromSheet(sourceName: string, tabs: SheetTa
         const rec = formatRecord(j + 1, header, row);
         if (rec) recs.push(rec);
       });
-      if (recs.length) chunks.push({ tab: tab.title, headerLine, records: recs.join('\n') });
+      if (recs.length) chunks.push({ tab: tab.title, headerLine, records: recs.join('\n'), emailByName });
     }
   }
 
@@ -313,9 +380,8 @@ export async function extractProjectsFromSheet(sourceName: string, tabs: SheetTa
             `Use the project-name column for the name; write a tight 1–2 sentence executive summary from the row; ` +
             `infer a sensible priority and status from the status/importance columns; put the 3–5 most useful columns as fields; ` +
             `set a deadline from any ETA/timeline column (YYYY-MM-DD, else empty); and add concrete next tasks the row implies. ` +
-            `If any column names a stakeholder/owner (Owner/POC/Stakeholder/Assigned-to/DRI or similar), put their ` +
-            `name in "owner"; if that same column (or an adjacent one) literally contains an email address, put it ` +
-            `in "ownerEmail" — never invent or guess an email from a name alone.`,
+            `If a stakeholder/owner column (Owner/POC/Stakeholder/Assigned-to/DRI or similar) literally contains an ` +
+            `email address, put it in "ownerEmail" — never invent or guess an email from a name alone.`,
         ),
         messages: [{ role: 'user', content: chunk.records }],
         tool: EXTRACT_TOOL,
@@ -324,7 +390,13 @@ export async function extractProjectsFromSheet(sourceName: string, tabs: SheetTa
       const raw = Array.isArray(result?.projects) ? result!.projects : [];
       return raw
         .filter((p): p is Record<string, unknown> => !!p && typeof p === 'object')
-        .map((p) => normalizeProject(p, sourceName, ''));
+        .map((p) => normalizeProject(p, sourceName, ''))
+        .map((p) => {
+          // Link the real stakeholder chip email back to this project by name. The
+          // chip email is authoritative over any literal email the AI happened to read.
+          const chipEmail = chunk.emailByName.get(normalizeProjectName(p.name));
+          return chipEmail ? { ...p, ownerEmail: chipEmail } : p;
+        });
     } catch (err) {
       logger.warn({ err, sourceName, tab: chunk.tab }, 'sheet chunk extraction failed — skipping chunk');
       return [] as ExtractedProject[];

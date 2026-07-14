@@ -9,6 +9,8 @@ export const VIEW_KEYS = [
   'chat',
   'dashboard',
   'projects',
+  'kpi',
+  'planner',
   'mail',
   'calendar',
   'journal',
@@ -31,6 +33,8 @@ export const VIEW_TITLES: Record<ViewKey, string> = {
   chat: 'Ask IRIS',
   dashboard: 'Dashboard',
   projects: 'Projects',
+  kpi: 'KPIs',
+  planner: 'Planner',
   mail: 'Mail Intelligence',
   calendar: 'Calendar',
   journal: 'Journal',
@@ -51,6 +55,8 @@ export const VIEW_PATHS: Record<ViewKey, string> = {
   chat: '/chat',
   dashboard: '/',
   projects: '/projects',
+  kpi: '/kpi',
+  planner: '/planner',
   mail: '/mail',
   calendar: '/calendar',
   journal: '/journal',
@@ -137,6 +143,25 @@ export function freqLabel(dayCount: number): string {
 /** Priority levels used across projects, tasks and mail. */
 export const PRIORITIES = ['critical', 'high', 'med', 'low'] as const;
 export type Priority = (typeof PRIORITIES)[number];
+
+/** KPI trend directions. */
+export const KPI_TRENDS = ['up', 'down', 'flat'] as const;
+
+/** Suggested KPI status words (free-text is allowed; these seed the editor). */
+export const KPI_STATUSES = ['On track', 'At risk', 'Off track', 'Exceeded', 'No data'] as const;
+
+/**
+ * Planner block accent palette. Keys are stored on the block; the web maps them
+ * to CSS colours. 'neutral' is the default.
+ */
+export const PLANNER_COLORS = ['neutral', 'accent', 'success', 'warn', 'danger', 'info'] as const;
+export type PlannerColor = (typeof PLANNER_COLORS)[number];
+
+/** Canonical planner colour key (falls back to 'neutral' for anything unknown). */
+export function normalizePlannerColor(color: string | null | undefined): PlannerColor {
+  const c = (color ?? '').trim().toLowerCase();
+  return (PLANNER_COLORS as readonly string[]).includes(c) ? (c as PlannerColor) : 'neutral';
+}
 
 /** Approval lifecycle for AI-prepared actions (the approval gate). */
 export const APPROVAL_STATUSES = ['pending', 'approved', 'rejected', 'executed', 'failed'] as const;

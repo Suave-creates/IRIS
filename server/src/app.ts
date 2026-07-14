@@ -25,6 +25,8 @@ import { memoryRoutes } from './modules/memory/memory.routes.js';
 import { peopleRoutes } from './modules/people/people.routes.js';
 import { notificationsRoutes } from './modules/notifications/notifications.routes.js';
 import { projectsRoutes } from './modules/projects/projects.routes.js';
+import { kpiRoutes } from './modules/kpi/kpi.routes.js';
+import { plannerRoutes } from './modules/planner/planner.routes.js';
 import { whiteboardRoutes } from './modules/whiteboard/whiteboard.routes.js';
 import { meRoutes } from './modules/users/me.routes.js';
 import { registerErrorHandling } from './plugins/errorHandler.js';
@@ -83,6 +85,8 @@ export async function buildApp(): Promise<FastifyInstance> {
       await api.register(meRoutes, { prefix: '/me' });
       await api.register(dashboardRoutes, { prefix: '/dashboard' });
       await api.register(projectsRoutes, { prefix: '/projects' });
+      await api.register(kpiRoutes, { prefix: '/kpi' });
+      await api.register(plannerRoutes, { prefix: '/planner' });
       await api.register(whiteboardRoutes, { prefix: '/whiteboard' });
       await api.register(journalRoutes, { prefix: '/journal' });
       await api.register(peopleRoutes, { prefix: '/people' });

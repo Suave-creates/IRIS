@@ -165,14 +165,15 @@ export async function peopleRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParamsSchema.parse(req.params);
     const found = await peopleRepo.getWithEvents(me.tenantId, id);
     if (!found) throw Errors.notFound('Person not found.');
-    const [meetings, actions, artifacts, projects, driveFiles] = await Promise.all([
+    const [meetings, actions, artifacts, projects, kpis, driveFiles] = await Promise.all([
       peopleRepo.meetingsForPerson(me.tenantId, found.person.name),
       peopleRepo.actionsForPerson(me.tenantId, found.person.name),
       peopleRepo.artifactsForPerson(me.tenantId, found.person.name),
       peopleRepo.projectsForPerson(me.tenantId, found.person.name, found.person.email),
+      peopleRepo.kpisForPerson(me.tenantId, found.person.name, found.person.email),
       sharedDriveFiles(me.tenantId, found.person.email),
     ]);
-    const context = buildPersonContext(found.person, found.events, meetings, actions, artifacts, projects);
+    const context = buildPersonContext(found.person, found.events, meetings, actions, artifacts, projects, kpis);
     // Real Drive files this person shared lead the Files tab; meeting artifacts follow.
     context.files = [...driveFiles, ...context.files];
     return { data: context };

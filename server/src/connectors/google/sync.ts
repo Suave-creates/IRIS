@@ -1,4 +1,5 @@
 import { execute } from '../../db/pool.js';
+import { userRepo } from '../../modules/users/user.repo.js';
 import { googleClient } from './client.js';
 import { triageEmails } from './mail.triage.js';
 
@@ -88,7 +89,66 @@ export function extractPlainText(payload?: GmailPayload): string {
   return decodeB64Url(payload.body?.data);
 }
 
-export async function syncGmail(tenantId: string): Promise<SyncResult> {
+/** Escapes a string for safe insertion into a RegExp. */
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** The mailbox owner's identifiers used to detect a tag/mention in a message body. */
+export interface MentionIdentity {
+  /** Email addresses matched as case-insensitive substrings (mailbox + IRIS account). */
+  emails: string[];
+  /** Full display name, matched as a whole word. */
+  fullName: string;
+  /** @-mention handles (first name, email local parts), matched as `@handle`. */
+  handles: string[];
+}
+
+/**
+ * True when the message body tags/mentions the mailbox owner: their email appears,
+ * their full name appears as a whole word, or an `@handle` of theirs appears.
+ * Deliberately does NOT treat a bare first name as a match (too noisy in prose).
+ */
+export function detectMention(body: string, identity: MentionIdentity): boolean {
+  if (!body) return false;
+  const hay = body.toLowerCase();
+  for (const email of identity.emails) {
+    const e = email.trim().toLowerCase();
+    if (e && hay.includes(e)) return true;
+  }
+  const full = identity.fullName.trim();
+  if (full.length >= 3 && new RegExp(`(^|\\W)${escapeRegex(full)}(\\W|$)`, 'i').test(body)) return true;
+  for (const handle of identity.handles) {
+    const h = handle.trim();
+    if (h.length >= 2 && new RegExp(`@${escapeRegex(h)}\\b`, 'i').test(body)) return true;
+  }
+  return false;
+}
+
+/** Resolves the mailbox owner's mention identity from the Gmail profile + the IRIS user record. */
+async function resolveMentionIdentity(tenantId: string, userId: string): Promise<MentionIdentity> {
+  let mailboxEmail = '';
+  try {
+    const profile = await googleClient.get<{ emailAddress?: string }>(
+      tenantId,
+      'https://gmail.googleapis.com/gmail/v1/users/me/profile',
+    );
+    mailboxEmail = profile.emailAddress?.trim() ?? '';
+  } catch {
+    /* profile is best-effort; fall back to the IRIS account email */
+  }
+  const user = await userRepo.findById(userId).catch(() => null);
+  const emails = [...new Set([mailboxEmail, user?.email ?? ''].map((e) => e.trim().toLowerCase()).filter(Boolean))];
+  const fullName = user?.name?.trim() ?? '';
+  const handles = [...new Set(
+    [fullName.split(/\s+/)[0] ?? '', ...emails.map((e) => e.split('@')[0] ?? '')]
+      .map((h) => h.trim())
+      .filter((h) => h.length >= 2),
+  )];
+  return { emails, fullName, handles };
+}
+
+export async function syncGmail(tenantId: string, userId?: string): Promise<SyncResult> {
   const listQs = new URLSearchParams({ maxResults: '15', q: 'newer_than:30d' }).toString();
   const list = await googleClient.get<GmailList>(
     tenantId,
@@ -96,8 +156,11 @@ export async function syncGmail(tenantId: string): Promise<SyncResult> {
   );
   const ids = (list.messages ?? []).slice(0, 15);
 
+  // Who is "me" — for detecting where the mailbox owner is tagged in the body.
+  const identity = userId ? await resolveMentionIdentity(tenantId, userId) : { emails: [], fullName: '', handles: [] };
+
   // 1) Fetch full messages (body included) so the AI summary has real content.
-  const emails: { gid: string; from: string; subject: string; snippet: string; body: string; received: Date }[] = [];
+  const emails: { gid: string; from: string; subject: string; snippet: string; body: string; received: Date; mentionsMe: boolean }[] = [];
   for (const { id: gid } of ids) {
     const msg = await googleClient.get<GmailMessage>(
       tenantId,
@@ -113,6 +176,7 @@ export async function syncGmail(tenantId: string): Promise<SyncResult> {
       snippet,
       body,
       received: msg.internalDate ? new Date(Number(msg.internalDate)) : new Date(),
+      mentionsMe: detectMention(body, identity),
     });
   }
 
@@ -124,10 +188,11 @@ export async function syncGmail(tenantId: string): Promise<SyncResult> {
     const e = emails[i]!;
     const t = triaged[i] ?? null;
     await execute(
-      `INSERT INTO mail_items (id, tenant_id, from_name, subject, summary, category, priority, received_at, tags)
-       VALUES (:id, :t, :from, :subj, :sum, :cat, :pri, :rcv, :tags)
+      `INSERT INTO mail_items (id, tenant_id, from_name, subject, summary, category, priority, received_at, tags, mentions_me)
+       VALUES (:id, :t, :from, :subj, :sum, :cat, :pri, :rcv, :tags, :mm)
        ON DUPLICATE KEY UPDATE from_name=VALUES(from_name), subject=VALUES(subject), summary=VALUES(summary),
-         category=VALUES(category), priority=VALUES(priority), received_at=VALUES(received_at), tags=VALUES(tags)`,
+         category=VALUES(category), priority=VALUES(priority), received_at=VALUES(received_at), tags=VALUES(tags),
+         mentions_me=VALUES(mentions_me)`,
       {
         id: `mailg_${e.gid}`.slice(0, 40),
         t: tenantId,
@@ -138,6 +203,7 @@ export async function syncGmail(tenantId: string): Promise<SyncResult> {
         pri: t?.priority ?? 'med',
         rcv: ymd(e.received),
         tags: JSON.stringify(t?.tags ?? []),
+        mm: e.mentionsMe ? 1 : 0,
       },
     );
   }

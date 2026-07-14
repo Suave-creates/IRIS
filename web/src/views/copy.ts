@@ -34,6 +34,16 @@ export const VIEW_COPY: Record<ViewKey, ViewCopy> = {
       'Pulled from your calendar, journal, conversations, and linked files — auto-prioritized by deadline.',
     delivers: 'M2 · projects + detail',
   },
+  kpi: {
+    title: 'KPIs',
+    subtitle: 'Your business metrics — actual against target, with trend and attainment, from linked dashboards or added by hand.',
+    delivers: 'M2 · KPI cards + detail',
+  },
+  planner: {
+    title: 'Planner',
+    subtitle: 'Block out the macro shape of your day, week, or month — the big rocks, not every to-do.',
+    delivers: 'M2 · weekly planner',
+  },
   mail: {
     title: 'Mail Intelligence',
     subtitle:

@@ -90,6 +90,7 @@ export const INTERACTION_COLORS: Record<PersonInteractionType, string> = {
   Call: 'var(--success)',
   Discussion: 'var(--info)',
   Note: 'var(--warn)',
+  Project: THU_PURPLE,
 };
 
 /** Engagement status → score/health colour. */
